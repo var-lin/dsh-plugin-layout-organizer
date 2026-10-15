@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build scratch
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+
+# Keep the built client bundle in the repository: DSH loads lib/client.js directly.
+
+# Session scratch
+.acl-recovery/
+src/.wprobe.txt
+
+# Stray files from mistyped commands
+0)inBlock
+console.log('ERR'

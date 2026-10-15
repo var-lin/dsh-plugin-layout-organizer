@@ -1,0 +1,12 @@
+# Inserts the Layout Organizer row into the web profile roster.
+# Applied as a profile bundle layer through the `dsh.bundle.patch` manifest field;
+# `dsh plugin --profile desktop add dsh-plugin-layout-organizer` appends the
+# package name to `dsh.profile.bundles` automatically.
+#
+# The row id and the package name must stay in step with each other AND with the client
+# bundle id in `lib/client.js` (built from `PKG` in build.mjs). A half-applied rename —
+# roster on the old name, client bundle on the new one — makes the loader reject the
+# bundle outright with a third-party plugin error.
+- insert:
+    - id: layout-organizer
+      name: 'dsh-plugin-layout-organizer'

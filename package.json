@@ -1,0 +1,80 @@
+{
+  "name": "dsh-plugin-layout-organizer",
+  "version": "1.0.0",
+  "description": "Reorder, separate and stash the buttons DSH renders in the sidebar, the sidebar footer, the conversation tabs, the composer dock and Settings — official and third-party alike.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./index.js",
+  "icon": "./assets/icons/layout.svg",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*": "./locale/*",
+    "./icon.svg": "./assets/icons/layout.svg",
+    "./assets/icons/layout.svg": "./assets/icons/layout.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "assets",
+    "index.js",
+    "lib",
+    "src",
+    "locale",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "check": "node --check lib/client.js",
+    "test": "node test/smoke.mjs && node test/navigate.mjs && node test/accept.mjs"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "dsh-bundle",
+    "cordis",
+    "sidebar",
+    "layout",
+    "reorder",
+    "stash"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.2.0-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-client-locale": ">=0.2.0-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-client-ui-layout": ">=0.2.0-rc.2 <0.3.0-0",
+    "@deepseek-ai/dsh-client-shortcuts": ">=0.2.0-rc.2 <0.3.0-0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-client-ui-slots": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-locale": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-layout": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-shortcuts": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=18",
+    "dsh": ">=0.2.0-rc.2"
+  }
+}

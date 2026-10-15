@@ -1,0 +1,209 @@
+let loMenuEl: HTMLElement | null = null;
+let loMenuBound = false;
+
+function closeMenu(): void {
+  if (loMenuEl && loMenuEl.parentNode) loMenuEl.parentNode.removeChild(loMenuEl);
+  loMenuEl = null;
+}
+
+function openMenu(event: MouseEvent, actions: MenuAction[]): void {
+  closeMenu();
+  // 背景在 aria-hidden 的 material 上；data-menu-material 是暗色主题换更亮描边的钩子
+  const menu = document.createElement("div");
+  menu.className = CLASS.pop;
+  menu.setAttribute("role", "menu");
+  menu.setAttribute("data-menu-material", "translucent");
+  menu.style.zIndex = String(Z_MENU);
+  const material = document.createElement("div");
+  material.className = CLASS.popMaterial;
+  material.setAttribute("aria-hidden", "true");
+  menu.appendChild(material);
+  const viewport = document.createElement("div");
+  viewport.className = CLASS.popViewport;
+  for (let i = 0; i < actions.length; i++) {
+    const action = actions[i];
+    const wrap = document.createElement("div");
+    wrap.className = CLASS.popWrap;
+    const item = document.createElement("button");
+    item.type = "button";
+    item.role = "menuitem";
+    item.className = CLASS.popItem;
+    if (action.disabled) item.disabled = true;
+    if (action.icon) {
+      const glyph = document.createElement("span");
+      glyph.className = CLASS.popIcon;
+      glyph.setAttribute("aria-hidden", "true");
+      glyph.innerHTML = action.icon;
+      item.appendChild(glyph);
+    }
+    const text = document.createElement("span");
+    text.className = CLASS.popText;
+    text.textContent = action.label;
+    item.appendChild(text);
+    item.onclick = function () {
+      closeMenu();
+      action.run();
+    };
+    wrap.appendChild(item);
+    viewport.appendChild(wrap);
+  }
+  menu.appendChild(viewport);
+  document.body.appendChild(menu);
+  const width = menu.offsetWidth || 144;
+  const height = menu.offsetHeight || 60;
+  const left = Math.min(event.clientX, window.innerWidth - width - 8);
+  const top = Math.min(event.clientY, window.innerHeight - height - 8);
+  menu.style.left = Math.max(8, Math.round(left)) + "px";
+  menu.style.top = Math.max(8, Math.round(top)) + "px";
+  loMenuEl = menu;
+}
+
+interface MenuAction {
+  label: string;
+  // 官方菜单每项左侧的 14px 线性图标；不给就只剩文字，不会留下空的图标列。
+  icon?: string;
+  disabled: boolean;
+  run: () => void;
+}
+
+function insideMenu(target: EventTarget | null): boolean {
+  return !!(loMenuEl && target && target instanceof Node && loMenuEl.contains(target));
+}
+
+function onMenuPointerDown(event: PointerEvent): void {
+  if (!loMenuEl) return;
+  // 菜单内部的 pointerdown 放过（由它自己的 click 关掉）；左键点外部才关——滚动、失焦都不关（AI 回答时页面自己滚动，菜单不能跟着消失）。
+  if (insideMenu(event.target)) return;
+  if (event.button !== 0) return;
+  closeMenu();
+}
+
+function onMenuKeyDown(event: KeyboardEvent): void {
+  if (event.key === "Escape" && loMenuEl) {
+    event.stopPropagation();
+    closeMenu();
+  }
+}
+
+function installMenuBindings(): void {
+  if (loMenuBound) return;
+  loMenuBound = true;
+  // 捕获阶段注册：菜单在官方处理函数对同一个手势作出反应之前就关掉。
+  document.addEventListener("pointerdown", onMenuPointerDown, true);
+  document.addEventListener("keydown", onMenuKeyDown, true);
+}
+
+function uninstallMenuBindings(): void {
+  if (!loMenuBound) return;
+  loMenuBound = false;
+  document.removeEventListener("pointerdown", onMenuPointerDown, true);
+  document.removeEventListener("keydown", onMenuKeyDown, true);
+  closeMenu();
+}
+
+// ---- 动作列表 ----
+
+// 轴向由 scope 表声明；`group` 为 "all" 表示混合排序：整条 scope 就是一个组，没有跨组限制。
+function menuActionsFor(store: StoreHandle, scope: string, id: string, group: string, axis: string): MenuAction[] {
+  const state = store.get();
+  const hidden = isHidden(state, scope, id);
+  const ids = liveOrder(scope) || [];
+  const groupIds: string[] = [];
+  for (let i = 0; i < ids.length; i++) {
+    if ((group === "all" || groupOf(state, scope, ids[i]) === group) && !isHidden(state, scope, ids[i])) groupIds.push(ids[i]);
+  }
+  const at = groupIds.indexOf(id);
+  const bound = group === "all" ? undefined : group;
+  const horizontal = axis === "x";
+  return [
+    {
+      label: horizontal ? t("action.left") : t("action.up"),
+      icon: horizontal ? MENU_ICON_LEFT : MENU_ICON_UP,
+      disabled: at <= 0,
+      run: function () {
+        store.update(function (next) {
+          moveRow(next, scope, id, -1, bound);
+        });
+      }
+    },
+    {
+      label: horizontal ? t("action.right") : t("action.down"),
+      icon: horizontal ? MENU_ICON_RIGHT : MENU_ICON_DOWN,
+      disabled: at < 0 || at >= groupIds.length - 1,
+      run: function () {
+        store.update(function (next) {
+          moveRow(next, scope, id, 1, bound);
+        });
+      }
+    },
+    {
+      label: hidden ? t("action.restore") : t("action.stash"),
+      icon: hidden ? MENU_ICON_UNARCHIVE : MENU_ICON_ARCHIVE,
+      disabled: false,
+      run: function () {
+        store.update(function (next) {
+          setHidden(next, scope, id, !hidden);
+        });
+      }
+    }
+  ];
+}
+
+// 管理列表走自己的 onContextMenu prop；轴向仍来自 scope 表。
+function attachMenuAt(event: MouseEvent, ctx: CtxLike, store: StoreHandle, scope: string, id: string, group: string): void {
+  event.preventDefault();
+  event.stopPropagation();
+  const el = (event.currentTarget || event.target) as HTMLElement;
+  const axis = containerAxis(el, scope);
+  openMenu(event, menuActionsFor(store, scope, id, group, axis));
+}
+
+// 只匹配被标记过的节点（侧边栏是行 BUTTON）；输入框、非管理按钮或空白处返回 null，交给原生菜单。
+function rowSelector(): string {
+  return "[" + MARKS.row + '="1"][' + MARKS.id + "]";
+}
+
+// 三级兜底：closest → elementsFromPoint → 矩形硬扫；`.st-strip` 带 pointer-events:none，前两级拿不到。
+function managedRowFrom(target: EventTarget | null, x?: number, y?: number): HTMLElement | null {
+  if (!target || !(target instanceof Element)) return null;
+  // 可编辑区域内的右键属于浏览器（复制/粘贴/拼写检查），即使它恰好位于被管理的行里。
+  if (target.closest("input, textarea, [contenteditable='true'], [contenteditable='']")) return null;
+  const selector = rowSelector();
+  const row = target.closest(selector);
+  if (row) return row as HTMLElement;
+  if (typeof x !== "number" || typeof y !== "number") return null;
+  const stack = document.elementsFromPoint(x, y);
+  for (let i = 0; i < stack.length; i++) {
+    const el = stack[i];
+    if (el.matches(selector)) return el as HTMLElement;
+  }
+  return rowAtPoint(selector, x, y);
+}
+
+function onWindowContextMenu(event: MouseEvent): void {
+  const row = managedRowFrom(event.target, event.clientX, event.clientY);
+  if (!row) return;
+  const scope = row.getAttribute(MARKS.scope);
+  const id = row.getAttribute(MARKS.id);
+  if (!scope || !id) return;
+  const store = loMenuStore;
+  if (!store) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const axis = containerAxis(row, scope);
+  openMenu(event, menuActionsFor(store, scope, id, groupOf(store.get(), scope, id), axis));
+}
+
+let loMenuStore: StoreHandle | null = null;
+
+function installRowMenu(store: StoreHandle): void {
+  loMenuStore = store;
+  installMenuBindings();
+  window.addEventListener("contextmenu", onWindowContextMenu, true);
+}
+
+function uninstallRowMenu(): void {
+  window.removeEventListener("contextmenu", onWindowContextMenu, true);
+  loMenuStore = null;
+  uninstallMenuBindings();
+}
