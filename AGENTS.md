@@ -18,8 +18,13 @@ DSH 客户端插件「插件布局整理」（`dsh-plugin-layout-organizer`）�
 - `lib/client.js` —— 构建产物（单文件，`window.__ModuleLoader__.load` 包裹）
 - `screenshots/` 与根目录 `screenshots.json` —— 插件市场详情页展示的截图（1-8 张，路径相对 `screenshots.json`，不得以 `/` 开头或含 `..`）。市场直接从仓库读取，不在 `files` 白名单里，不随 npm 包发布
 - `test/` —— 三个测试：`smoke.mjs`（无头冒烟）、`navigate.mjs`（设置两步路由行为）、`accept.mjs`（源码形态验收探针）
-- `tools/` —— 本地工具：`ts-check.mjs`（用 VS Code 自带的 TypeScript 跑真实类型检查）、`asar-read.mjs`（读 app.asar 内部文件）
+- `tools/` —— 本地工具：`ts-check.mjs`（用 VS Code 自带的 TypeScript 跑真实类型检查）、`asar-read.mjs`（读 app.asar 内部文件）、`release-notes.mjs`（从 `CHANGELOG.md` 抽指定版本段落，供 CI 建 Release 当说明）
+- `.github/workflows/publish.yml` —— 发版自动化：推送 `v*` tag 时构建 → 校验构建产物与源码一致 → 测试 → 发布 npm（Trusted Publishing / OIDC）→ 建同名 GitHub Release（说明取自 CHANGELOG）。npm 上已有该版本则跳过发布，Release 已存在则改写说明，可安全重跑
 - `README.md` / `README.en.md` —— 中文（默认）/ 英文说明，须与代码保持一致；`CHANGELOG.md` 记录版本变更
+
+## 发版
+
+1. `package.json` 升号；2. `CHANGELOG.md` 新增版本段与底部 `[x.y.z]: …/releases/tag/vx.y.z` 链接定义行；3. `git tag vX.Y.Z` 后推送 tag，其余由 `publish.yml` 完成（tag 名与版本号不一致 CI 直接失败）。
 
 ## 构建与测试
 

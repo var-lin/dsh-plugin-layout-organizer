@@ -86,6 +86,16 @@ node test/accept.mjs    # source-shape acceptance probe for the feedback items
 
 (Equivalent to `npm run build` / `npm run check` / `npm test`.)
 
+### Releasing
+
+Push a `v*` tag and [`.github/workflows/publish.yml`](.github/workflows/publish.yml) builds, verifies the committed artifact matches the sources, runs the tests, publishes to npm (Trusted Publishing / OIDC, no token needed) and creates a GitHub Release of the same name whose notes come from the matching `CHANGELOG.md` section via `tools/release-notes.mjs`:
+
+```sh
+git tag vX.Y.Z && git push origin vX.Y.Z
+```
+
+The workflow is idempotent: an existing npm version is skipped and an existing Release has its notes rewritten, so re-runs are safe. Before tagging, bump `package.json`, add the `CHANGELOG.md` section plus its link definition line, and keep the tag name equal to the version — the CI fails otherwise.
+
 ### Source layout
 
 A client bundle may only `require` platform seed words or packages already registered in the boot graph, so **runtime chunk loading by relative path is not available**. This project therefore uses **modular sources plus a build-time concatenation**:

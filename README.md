@@ -83,6 +83,16 @@ node test/accept.mjs    # 源码形态验收探针
 
 （等价于 `npm run build` / `npm run check` / `npm test`。）
 
+### 发版
+
+推送 `v*` tag 即可，[`.github/workflows/publish.yml`](.github/workflows/publish.yml) 会自动构建、校验构建产物与源码一致、跑测试、发布到 npm（Trusted Publishing / OIDC，无需 token），并用 `tools/release-notes.mjs` 从 `CHANGELOG.md` 抽出对应段落创建同名 GitHub Release：
+
+```sh
+git tag vX.Y.Z && git push origin vX.Y.Z
+```
+
+工作流是幂等的：npm 上已有该版本就跳过发布，Release 已存在就改写说明，可安全重跑。发版前记得三件事——`package.json` 升号、`CHANGELOG.md` 新增版本段与底部链接定义行、tag 名与版本号一致（CI 会校验，不一致直接失败）。
+
 ### 源码组织
 
 客户端包只能 `require` 启动图里已注册的种子词或包，**不能按相对路径在运行时分块加载**，因此本项目采用**模块化源码 + 构建期拼接**：
