@@ -3,7 +3,12 @@
 本项目的所有重要变更都记录在这里。
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
-## [未发布]
+## [1.0.1] - 2026-10-16
+
+### 修复
+
+- **对话输入框停靠行的身份错配**：停靠行台账里有记录、但组件在开关关闭时整条渲染成 `null`（供应商未登录时的统计读数），于是「记录数 ≠ 屏幕元素数」时按位置兜底配对会把 token-saver 的条子认成别的插件记录。现在这类记录按正证据认领（官方统计的 `data-composer-stats` 钩子、token-saver 的 `.st-strip` 类名），**数量不相等时不再按位置猜**；设置页与按钮收纳包只列屏幕上真实存在的行，渲染成空的那两条不再出现、不再抢名字。
+- **收纳官方统计与用量百分比不再互相牵连**：删掉 `LINKED_HIDE` 级联表，官方统计（`stats`）与 7% 用量百分比（`context-meter`）各自收纳、各自恢复；用量百分比分类归官方。
 
 ## [1.0.0] - 2026-10-15
 
@@ -32,4 +37,5 @@
 - 官方 / 第三方分类依赖内置 id 白名单，因为槽位条目没有可靠的来源字段；任何行都可以在设置页手动改判。
 - 「收纳」不是卸载；被收纳的按钮只是隐藏，其插件仍在运行。
 
+[1.0.1]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.0.1
 [1.0.0]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.0.0

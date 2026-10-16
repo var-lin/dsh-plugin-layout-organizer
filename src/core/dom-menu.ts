@@ -101,9 +101,16 @@ function uninstallMenuBindings(): void {
   closeMenu();
 }
 
-// ---- 动作列表 ----
-
-// 轴向由 scope 表声明；`group` 为 "all" 表示混合排序：整条 scope 就是一个组，没有跨组限制。
+/**
+ * 轴向由 scope 表声明；`group` 为 "all" 表示混合排序：整条 scope 就是一个组，没有跨组限制。
+ *
+ * @param store 状态句柄，菜单项执行时经它改写顺序与收纳状态。
+ * @param scope 槽位 key。
+ * @param id 右键点中的行 id。
+ * @param group 限定组；"all" 表示整条 scope 一个组。
+ * @param axis 轴向，"x" 时文案与图标取左右，其余取上下。
+ * @returns 移动（上/下或左/右）与收纳/恢复共三个动作，其中不可用方向按行在组内的位置置 disabled。
+ */
 function menuActionsFor(store: StoreHandle, scope: string, id: string, group: string, axis: string): MenuAction[] {
   const state = store.get();
   const hidden = isHidden(state, scope, id);
@@ -149,7 +156,16 @@ function menuActionsFor(store: StoreHandle, scope: string, id: string, group: st
   ];
 }
 
-// 管理列表走自己的 onContextMenu prop；轴向仍来自 scope 表。
+/**
+ * 管理列表走自己的 onContextMenu prop；轴向仍来自 scope 表。
+ *
+ * @param event 列表行的右键事件，处理时阻止默认菜单与冒泡。
+ * @param ctx 上下文；当前实现未使用该参数。
+ * @param store 状态句柄，透传给 menuActionsFor。
+ * @param scope 槽位 key。
+ * @param id 行 id。
+ * @param group 行所属组。
+ */
 function attachMenuAt(event: MouseEvent, ctx: CtxLike, store: StoreHandle, scope: string, id: string, group: string): void {
   event.preventDefault();
   event.stopPropagation();
@@ -158,12 +174,23 @@ function attachMenuAt(event: MouseEvent, ctx: CtxLike, store: StoreHandle, scope
   openMenu(event, menuActionsFor(store, scope, id, group, axis));
 }
 
-// 只匹配被标记过的节点（侧边栏是行 BUTTON）；输入框、非管理按钮或空白处返回 null，交给原生菜单。
+/**
+ * 只匹配被标记过的节点（侧边栏是行 BUTTON）；输入框、非管理按钮或空白处返回 null，交给原生菜单。
+ *
+ * @returns 匹配带行标记属性节点的选择器。
+ */
 function rowSelector(): string {
   return "[" + MARKS.row + '="1"][' + MARKS.id + "]";
 }
 
-// 三级兜底：closest → elementsFromPoint → 矩形硬扫；`.st-strip` 带 pointer-events:none，前两级拿不到。
+/**
+ * 三级兜底：closest → elementsFromPoint → 矩形硬扫；`.st-strip` 带 pointer-events:none，前两级拿不到。
+ *
+ * @param target 右键事件的原始目标。
+ * @param x 指针横坐标，仅在需要按坐标兜底时使用。
+ * @param y 指针纵坐标，仅在需要按坐标兜底时使用。
+ * @returns 命中的被管理行；目标不是元素、落在可编辑区域、坐标缺失或三级都未命中时返回 null。
+ */
 function managedRowFrom(target: EventTarget | null, x?: number, y?: number): HTMLElement | null {
   if (!target || !(target instanceof Element)) return null;
   // 可编辑区域内的右键属于浏览器（复制/粘贴/拼写检查），即使它恰好位于被管理的行里。

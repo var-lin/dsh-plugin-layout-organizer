@@ -1,9 +1,11 @@
 
 // 账本报出的一行：store 持久化的 id、给人看的标签，以及官方渲染器会采用的注册顺序。
+// `hasLabel` 为真表示这个标签是权威文案，不是 id 兜底或投影猜出来的名字。
 interface ScopeEntry {
   id: string;
   label: string;
   order: number;
+  hasLabel?: boolean;
 }
 
 interface ScopeCardProps {
@@ -51,7 +53,12 @@ interface ShortcutEditorService {
   edit(edit: { type: string; id?: string; binding?: unknown }, revision: string): Promise<{ status?: string } | null | undefined>;
 }
 
-// 成功绝不能被报成 保存失败：`"saved"` 与 `"ok"` 都算成功。
+/**
+ * 成功绝不能被报成 保存失败：`"saved"` 与 `"ok"` 都算成功。
+ *
+ * @param status 编辑服务返回的状态值。
+ * @returns 状态为 `"saved"` 或 `"ok"` 时为 true。
+ */
 function shortcutSaveOk(status: unknown): boolean {
   return status === "saved" || status === "ok";
 }
@@ -67,13 +74,32 @@ function scopeEntries(ctx: CtxLike, state: PluginState, scope: string): ScopeEnt
   for (i = 0; i < entries.length; i++) ids.push(entries[i].id);
   const order = reconcileOrder(state, scope, ids);
 
-  const out: ScopeEntry[] = [];
+  // 只列屏幕上真正存在的行：台账里渲染成空的记录（供应商未登录时的统计读数）不该出现，
+  // 否则用户会对着一行看不见的条目排序、收纳（见 liveRows）。
+  const live = liveRowIds(scope);
+  const listed: string[] = [];
   for (i = 0; i < order.length; i++) {
-    const entry = byId[order[i]];
-    if (entry) out.push(entry);
+    const id = order[i];
+    if (live && live.indexOf(id) < 0) continue;
+    const entry = byId[id];
+    if (entry) listed.push(id);
   }
   // 协调后顺序里没见过的行按账本顺序追加在末尾，而不是悄悄消失。
-  for (i = 0; i < entries.length; i++) if (out.indexOf(entries[i]) < 0) out.push(entries[i]);
+  for (i = 0; i < entries.length; i++) {
+    const id = entries[i].id;
+    if (listed.indexOf(id) >= 0) continue;
+    if (live && live.indexOf(id) < 0) continue;
+    listed.push(id);
+  }
+
+  const out: ScopeEntry[] = [];
+  for (i = 0; i < listed.length; i++) {
+    const entry = byId[listed[i]];
+    if (!entry) continue;
+    // 台账没给文案时用投影记下的名字（钩子文案或界面文字），不要露出裸 id。
+    const shown = entry.hasLabel ? entry.label : liveRowLabel(scope, entry.id) || hookLabel(scope, entry.id);
+    out.push({ id: entry.id, label: shown || entry.label, order: entry.order, hasLabel: entry.hasLabel || !!shown });
+  }
   return out;
 }
 
@@ -164,7 +190,12 @@ function ScopeCard(props: ScopeCardProps): any {
   );
 }
 
-// 快捷键编辑器的一行：键帽本身即录制入口；冲突与不受支持的组合由 `describeBinding` 以文字报出。
+/**
+ * 快捷键编辑器的一行：键帽本身即录制入口；冲突与不受支持的组合由 `describeBinding` 以文字报出。
+ *
+ * @param props 上下文与状态句柄，见 ShortcutCardProps。
+ * @returns 快捷键卡片元素。
+ */
 function ShortcutCard(props: ShortcutCardProps): any {
   const ctx = props.ctx;
   useStoreTick(props.store);
@@ -212,7 +243,12 @@ function ShortcutCard(props: ShortcutCardProps): any {
     }
   }
 
-  // 冲突报告需把 id 映射回人类可读标签，目录是唯一提供该映射的地方。
+  /**
+   * 冲突报告需把 id 映射回人类可读标签，目录是唯一提供该映射的地方。
+   *
+   * @param ids 冲突的快捷键 id 列表。
+   * @returns 目录里有对应标签时用标签，否则退回 id 本身，逗号分隔。
+   */
   function names(ids: string[]): string {
     const catalog = shortcuts && shortcuts.catalog ? shortcuts.catalog.getSnapshot() || [] : [];
     const out: string[] = [];
@@ -226,7 +262,11 @@ function ShortcutCard(props: ShortcutCardProps): any {
     return out.join(", ");
   }
 
-  // 用服务自己的格式化器重建键帽，保持与应用其它地方的打印一致。
+  /**
+   * 录制期间由文档级捕获监听器收到按键：收集修饰键后把整组绑定交给服务的 `describeBinding`，由它报出问题或冲突。
+   *
+   * @param event 键帽上捕获到的按键事件；纯修饰键直接返回，描述器报出问题/冲突时只更新报告文字，都不写配置。
+   */
   function capture(event: KeyboardEvent): void {
     event.preventDefault();
     event.stopPropagation();
@@ -281,7 +321,11 @@ function ShortcutCard(props: ShortcutCardProps): any {
     });
   }
 
-  // 录制由文档级捕获监听器驱动并阻止传播，录制中的按键到不了这个处理函数。
+  /**
+   * 录制由文档级捕获监听器驱动并阻止传播，录制中的按键到不了这个处理函数。
+   *
+   * 调用时先清掉上一次的报告文字，再在录制/未录制之间切换。
+   */
   function toggleRecording(): void {
     setReport(null);
     setRecording(!recording);

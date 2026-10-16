@@ -28,31 +28,42 @@ function clearMarks(el: HTMLElement | null): void {
   clearSelfIcon(el);
 }
 
-// LINKED_HIDE 指名成对节点（输入框记录与旁边的用量百分比），级联双向：恢复一个会把两个都带回来。
-function linkedIds(scope: string, id: string): string[] {
-  const table = LINKED_HIDE[scope];
-  if (!table) return [];
-  const out: string[] = [];
-  for (const source in table) {
-    const targets = table[source];
-    if (source === id) {
-      for (let i = 0; i < targets.length; i++) out.push(targets[i]);
-    } else if (targets.indexOf(id) >= 0) {
-      out.push(source);
-    }
-  }
-  return out;
-}
-
-// 没有台账记录认领的行也必须拿到排在受管行之后的 order，否则按默认 order: 0 浮到最前面。
+/**
+ * 判断 id 是否为合成行。
+ *
+ * 没有台账记录认领的行也必须拿到排在受管行之后的 order，否则按默认 order: 0 浮到最前面。
+ *
+ * @param scope scope 键。
+ * @param id 行 id。
+ * @returns 在 SYNTHETIC_IDS 表里登记过时为真。
+ */
 function isSynthetic(scope: string, id: string): boolean {
   const list = SYNTHETIC_IDS[scope];
   return !!list && list.indexOf(id) >= 0;
 }
 
-// ---- 为未列出的行生成 DOM 派生 id ----
+/**
+ * 给一行取显示名：台账文案优先，其次认领钩子里声明的名字，最后退回 id。
+ *
+ * @param scope scope 键。
+ * @param id 行 id。
+ * @param label 台账文案；没有时传空字符串。
+ * @returns 该行在设置页与收纳包里显示的名字。
+ */
+function displayLabel(scope: string, id: string, label: string): string {
+  if (label) return label;
+  const hooked = hookLabel(scope, id);
+  if (hooked) return hooked;
+  const live = liveRowLabel(scope, id);
+  return live || id;
+}
 
-// 未认领的行从 DOM 派生稳定 id，只用标识属性不用位置。
+/**
+ * 未认领的行从 DOM 派生稳定 id，只用标识属性不用位置。
+ *
+ * @param el 需要派生 id 的行元素。
+ * @returns 首个可用的标识属性拼出的 id；没有标识属性时依次退回行上的文字、图标类名；都取不到时返回空字符串。
+ */
 function domIdOf(el: HTMLElement): string {
   const attrs = ["data-action", "data-testid", "data-panel", "data-view", "id", "aria-label", "name", "title"];
   for (let i = 0; i < attrs.length; i++) {
@@ -74,7 +85,13 @@ function domIdOf(el: HTMLElement): string {
   return "";
 }
 
-// 台账配对已经给这个元素分了记录时为真，DOM 派生那一趟放过它。
+/**
+ * 台账配对已经给这个元素分了记录时为真，DOM 派生那一趟放过它。
+ *
+ * @param pairs 台账配对结果。
+ * @param el 待检查的元素。
+ * @returns 该元素已被某条记录认领时为真。
+ */
 function claimedPairs(pairs: Pair[], el: HTMLElement): boolean {
   for (let i = 0; i < pairs.length; i++) if (pairs[i].el === el) return true;
   return false;
@@ -87,6 +104,7 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): ScopeResul
   // 行整个不见了，顺手收掉按旧几何量定位的分割线。
   if (!units) {
     hideDivider(scope);
+    setLiveRows(scope, null);
     return { mounted: false, official: 0, third: 0 };
   }
 
@@ -130,7 +148,7 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): ScopeResul
     const sid = slotRows[i].getAttribute(MARKS.id);
     if (sid && !stamped[sid]) stamped[sid] = slotRows[i];
   }
-  const pairs = pairRows(entryList, slotRows, stamped);
+  const pairs = pairRows(entryList, slotRows, stamped, scope);
 
   // 台账没点名的行按 DOM 派生 id 加入排序与隐藏（见 domIdOf），并按第三方行处理。
   const extraUnits: { el: HTMLElement; id: string }[] = [];
@@ -145,7 +163,8 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): ScopeResul
 
   const claimed: HTMLElement[] = [];
   const visible: Record<string, { id: string; el: HTMLElement }[]> = { official: [], third: [] };
-  const rowById: Record<string, HTMLElement> = {};
+  // 本轮真正落到屏幕上的行：设置页与收纳包只列这些（见 liveRows）。
+  const live: LiveRow[] = [];
   let index = 0;
   const canDragOfficial = state.options.allowDragOfficial === true;
 
@@ -177,9 +196,10 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): ScopeResul
     if (!el) continue;
     clearMarks(el);
     claimed.push(el);
-    rowById[id] = el;
     const kind = kindOf(state, scope, id);
     const group = kind === "official" ? "official" : "third";
+    const entry = byId[id];
+    live.push({ id: id, label: displayLabel(scope, id, entry && entry.hasLabel ? entry.label : "") });
     el.setAttribute(MARKS.row, "1");
     el.setAttribute(MARKS.scope, scope);
     el.setAttribute(MARKS.id, id);
@@ -195,21 +215,16 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): ScopeResul
     visible[group].push({ id: id, el: el });
   }
 
-  // 被链接的伙伴跟随来源的可见性（见 linkedIds）。
-  for (const id in rowById) {
-    if (!isHidden(state, scope, id)) continue;
-    const linked = linkedIds(scope, id);
-    for (let i = 0; i < linked.length; i++) {
-      const el = rowById[linked[i]];
-      if (el && !el.hasAttribute(MARKS.hidden)) el.setAttribute(MARKS.hidden, "1");
-    }
-  }
+  // 收纳各管各自的：官方统计与用量百分比不再互相级联（见 OFFICIAL_IDS 的说明）。
 
   // 早先打过标记、已不再对应存活记录的行（插件停用、分区消失）原样交还。
   const stale = document.querySelectorAll("[" + MARKS.scope + '="' + scope + '"][' + MARKS.row + "]");
   for (let i = 0; i < stale.length; i++) {
     if (claimed.indexOf(stale[i] as HTMLElement) < 0) clearMarks(stale[i] as HTMLElement);
   }
+
+  // 记下本轮真正在屏幕上的行，设置页与收纳包据此只列屏幕上存在的条目（见 liveRows）。
+  setLiveRows(scope, live);
 
   let tail = index;
   for (let i = 0; i < rows.length; i++) {
@@ -242,4 +257,6 @@ function clearScope(scope: string): void {
   const rows = document.querySelectorAll("[" + MARKS.scope + '="' + scope + '"][' + MARKS.row + "]");
   for (let i = 0; i < rows.length; i++) clearMarks(rows[i] as HTMLElement);
   hideDivider(scope);
+  // 插件卸下后设置页与收纳包不能再读上一轮的投影结果。
+  setLiveRows(scope, null);
 }

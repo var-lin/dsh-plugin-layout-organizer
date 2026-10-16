@@ -46,7 +46,12 @@ interface ShortcutsService {
   registry?: { definitions(): { id: string }[] };
 }
 
-// 客户端已知的全部命令 id；两个接口都不存在时返回 `null`，必须与「列表为空」区分开。
+/**
+ * 读取客户端已知的全部命令 id。
+ *
+ * @param shortcuts 客户端的快捷键服务，可能只有 `catalog` 或只有较旧的 `registry`。
+ * @returns 命令 id 列表；两个接口都不存在时返回 `null`，必须与「列表为空」区分开。
+ */
 function shortcutIds(shortcuts: ShortcutsService): string[] | null {
   const out: string[] = [];
   try {
@@ -98,7 +103,7 @@ interface StateOptions {
 interface PluginState {
   version: number;
   options: StateOptions;
-  // scope -> 有序 id 列表。scope 内部的顺序只对第三方那一块有权威性；官方那一块永远排在前面（见 `reconcileOrder`）。
+  // scope -> 有序 id 列表。没开混合排序时只有第三方那一块的组内顺序算数，官方整块固定排前面；开了混合排序则这份顺序是唯一权威（见 `reconcileOrder`）。
   order: Record<string, string[]>;
   // "scope:id" -> "official" | "third"。优先于内置白名单。
   kinds: Record<string, string>;

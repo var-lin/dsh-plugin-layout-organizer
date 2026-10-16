@@ -21,8 +21,6 @@ function check(name, condition, detail) {
   }
 }
 
-// ---- 一个真的能被查询的假 DOM --------------------------------------------
-
 /* 极简的选择器支持：插件只要 `[attr]`、`[attr="v"]`、`tag`、`tag[attr="v"]`、`:scope > tag`、`.class`
    和属性前缀这几种，结构化匹配即可，不依赖外部库。 */
 function matches(el, selector) {
@@ -204,8 +202,6 @@ function flushFrames() {
   for (const fn of q) fn(Date.now());
 }
 
-// ---- 假 React -------------------------------------------------------------
-
 const hookSlots = [];
 let hookIndex = 0;
 const React = {
@@ -244,8 +240,6 @@ function requireStub(spec) {
   if (spec === "react-dom/client") return ReactDOMClient;
   throw new Error("navigate: unexpected require(" + spec + ")");
 }
-
-// ---- 假 ctx ---------------------------------------------------------------
 
 const settingsEntries = [
   { options: { id: "account", order: -10, label: "Account" } },
@@ -291,8 +285,6 @@ const ctx = {
   }
 };
 
-// ---- 加载这个包 -----------------------------------------------------------
-
 let definition = null;
 globalThis.window.__ModuleLoader__ = {
   load(def) {
@@ -311,7 +303,9 @@ const capture =
   "    try { globalThis.__loNavigateTo = navigateTo; } catch (err) { /* not present */ }\n" +
   anchor;
 const probePath = join(dirname(file), "..", "lib", ".navigate-probe.mjs");
-// 探针文件是构建产物，运行结束必须清理，断言失败提前退出时也不例外。
+/**
+ * 探针文件是构建产物，运行结束必须清理，断言失败提前退出时也不例外。
+ */
 function cleanupProbe() {
   try {
     rmSync(probePath, { force: true });
@@ -337,7 +331,12 @@ if (typeof globalThis.__loNavigateTo !== "function") {
 
 console.log("two-step settings route");
 
-// 通过收集器拿到的 `navigateTo` 驱动包作用域里的这条路由。
+/**
+ * 通过收集器拿到的 `navigateTo` 驱动包作用域里的这条路由。
+ * @param scope 槽位名，如 `settings`、`sidebar`
+ * @param id 目标项在该槽位里的 id
+ * @throws 没有捕获到 `__loNavigateTo` 时抛错，说明探针没注入成功。
+ */
 function open(scope, id) {
   if (typeof globalThis.__loNavigateTo !== "function") {
     throw new Error("navigate: __loNavigateTo was not captured");

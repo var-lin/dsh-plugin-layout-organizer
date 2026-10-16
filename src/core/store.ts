@@ -17,7 +17,7 @@ interface StateOptions {
 interface PluginState {
   version: number;
   options: StateOptions;
-  // scope -> 有序 id 列表；顺序只对第三方那一块有权威，官方永远排前面（见 reconcileOrder）。
+  // scope -> 有序 id 列表。没开混合排序时只有第三方那一块的组内顺序算数，官方整块固定排前面；开了混合排序则这份顺序是唯一权威（见 reconcileOrder）。
   order: Record<string, string[]>;
   // "scope:id" -> "official" | "third"。优先于内置白名单。
   kinds: Record<string, string>;
@@ -47,14 +47,14 @@ function defaultState(): PluginState {
     version: STATE_VERSION,
     options: {
       allowDragOfficial: false,
-      // 缺省打开：允许拖动官方按钮，默认即可自由混排。
+      // 缺省打开；要真正混排还需 allowDragOfficial 也打开（见 mixedOrder）。
       mixGroups: true,
       showDivider: false,
       dividers: {},
       showStashLauncher: true,
       collapsed: {},
       launcherSide: "right",
-      // 拖动中才有值：按住按钮时它就是指针所在的横坐标，松手后立刻清空。
+      // 横向跟手只落在手势状态里，store 侧不记录拖动中的横坐标；松手后贴左 / 贴右由 launcherSide 决定。
       launcherX: null,
       // null 表示「顶栏下方紧跟的位置」；数字表示距窗口顶部的像素距离。
       launcherY: null
@@ -82,7 +82,12 @@ function asBoolMap(value: unknown): Record<string, boolean> {
   return out;
 }
 
-// 读不出来的内容回退默认值，损坏的键不会把设置页弄死。
+/**
+ * 读不出来的内容回退默认值，损坏的键不会把设置页弄死。
+ *
+ * @param raw 从 localStorage 解析出的原始值，可能缺字段或类型不对。
+ * @returns 归一化后的状态：版本对不上就整份回退默认值，其余按字段校验。
+ */
 function normalizeState(raw: unknown): PluginState {
   const base = defaultState();
   const source = asObject(raw);
@@ -136,9 +141,7 @@ function readState(): PluginState {
   }
 }
 
-// ---- 修订号 ----
-
-// update() 在监听器跑完后自增修订号，useRevisionTick 再下一帧重渲染。
+// 修订号在监听器跑完后自增；重渲染由紧随其后的 notifyRevision 通知订阅者驱动（见 useRevisionTick）。
 let __storeRevision = 0;
 const __revisionListeners: Array<() => void> = [];
 
@@ -162,7 +165,11 @@ function notifyRevision(): void {
   }
 }
 
-// React 侧的绑定：一个恰好随修订号变化的计数器。
+/**
+ * React 侧的绑定：一个恰好随修订号变化的计数器。
+ *
+ * @returns 修订计数，每次 notifyRevision 后自增，用作重渲染的触发值。
+ */
 function useRevisionTick(): number {
   const [tick, setTick] = useState(0);
   useEffect(function () {
@@ -215,7 +222,7 @@ function createStore(): StoreHandle {
       const next = mutator(state);
       if (next) state = next;
       emit();
-      // 紧跟监听器之后自增修订号，这一帧里的投影已生效。
+      // 监听器跑完后再自增修订号并通知 React 侧订阅者。
       __storeRevision += 1;
       notifyRevision();
       if (timer) window.clearTimeout(timer);
@@ -237,8 +244,6 @@ function createStore(): StoreHandle {
   };
 }
 
-// ---- 纯查询 ----
-
 function kindOf(state: PluginState, scope: string, id: string): string {
   const manual = state.kinds[scope + ":" + id];
   if (manual === "official" || manual === "third") return manual;
@@ -250,7 +255,12 @@ function groupOf(state: PluginState, scope: string, id: string): string {
   return kindOf(state, scope, id) === "official" ? "official" : "third";
 }
 
-// 混合排序要求「允许拖动官方按钮」同时打开，这是唯一判据。
+/**
+ * 混合排序要求「允许拖动官方按钮」同时打开，这是唯一判据。
+ *
+ * @param state 当前状态。
+ * @returns 是否按混合排序处理（官方与第三方可互相穿插）。
+ */
 function mixedOrder(state: PluginState): boolean {
   return state.options.allowDragOfficial === true && state.options.mixGroups === true;
 }
@@ -259,7 +269,13 @@ function hiddenKey(scope: string, id: string): string {
   return scope + ":" + id;
 }
 
-// 本 scope 画不画分隔线：总开关 AND 本 scope 自己的开关，没写过算开；白名单限定 composer/footer 之外的 scope。
+/**
+ * 本 scope 画不画分隔线：总开关 AND 本 scope 自己的开关，没写过算开；白名单限定 composer/footer 之外的 scope。
+ *
+ * @param state 当前状态。
+ * @param scope 槽位 key。
+ * @returns 该 scope 本轮是否要画分隔线。
+ */
 function dividerEnabled(state: PluginState, scope: string): boolean {
   if (state.options.showDivider !== true) return false;
   if (DIVIDER_SCOPES.indexOf(scope) < 0) return false;
@@ -271,7 +287,14 @@ function isHidden(state: PluginState, scope: string, id: string): boolean {
   return state.hidden[hiddenKey(scope, id)] === true;
 }
 
-// 官方永远排最前、第三方在后，保存的顺序只决定组内位置；混排打开时保存顺序成为唯一权威，未见过的 id 追在末尾。
+/**
+ * 官方永远排最前、第三方在后，保存的顺序只决定组内位置；混排打开时保存顺序成为唯一权威，未见过的 id 追在末尾。
+ *
+ * @param state 当前状态，只读取保存的顺序与分类。
+ * @param scope 槽位 key。
+ * @param discovered 本轮发现的 id（台账与 DOM 派生）。
+ * @returns 可直接用于投影的有序 id 列表。
+ */
 function reconcileOrder(state: PluginState, scope: string, discovered: string[]): string[] {
   const saved = state.order[scope] || [];
   const known: Record<string, boolean> = {};
@@ -315,8 +338,6 @@ function stashEntries(state: PluginState): StashEntry[] {
   return out;
 }
 
-// ---- 纯命令 ----
-
 function setOption(state: PluginState, key: string, value: unknown): void {
   // 没有索引签名，两次断言才落得到 `Record` 上。
   (state.options as unknown as Record<string, unknown>)[key] = value;
@@ -332,7 +353,16 @@ function writeOrder(state: PluginState, scope: string, ids: string[]): void {
   state.order[scope] = ids.slice();
 }
 
-// 在行自己所属的组内移动一行。移动无效果时返回 false，调用方据此跳过重渲染。
+/**
+ * 在行自己所属的组内移动一行。
+ *
+ * @param state 当前状态，命中的话原地改写 `order`。
+ * @param scope 槽位 key。
+ * @param id 要移动的行。
+ * @param delta 方向：正数向后，其余向前。
+ * @param group 限定组（"official" / "third"）；不传表示整条 scope 一个组。
+ * @returns 是否真的移动了；false 表示行不在列表里或该方向没有同组行。
+ */
 function moveRow(state: PluginState, scope: string, id: string, delta: number, group?: string): boolean {
   const list = (state.order[scope] || []).slice();
   const from = list.indexOf(id);
@@ -355,7 +385,12 @@ function moveRow(state: PluginState, scope: string, id: string, delta: number, g
   return true;
 }
 
-// 恢复一个 scope 的布局：排序归零、收纳清空；分类覆盖会被保留，那是用户知识不是布局。
+/**
+ * 恢复一个 scope 的布局：排序归零、收纳清空；分类覆盖会被保留，那是用户知识不是布局。
+ *
+ * @param state 当前状态，原地改写 `order` 与 `hidden`。
+ * @param scope 槽位 key。
+ */
 function resetScope(state: PluginState, scope: string): void {
   state.order[scope] = [];
   const keys = Object.keys(state.hidden);

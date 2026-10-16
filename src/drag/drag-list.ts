@@ -12,8 +12,9 @@ function createListDragController(store: StoreHandle): { attach: () => void; det
   let touched: HTMLElement[] = [];
   // 最近一次 `update()` 算出的组内目标下标，松手时直接加在该组跨度起点上换算容器下标。
   let insertAt = 0;
-  // 垂直列表只看 Y；待执行的重算帧，0 表示本帧没有排队的重算。
+  // 垂直列表只看 Y。
   let lastPointer = 0;
+  // 待执行的重算帧；0 表示本帧没有排队的重算。
   let rafId = 0;
 
   function rowFrom(target: EventTarget | null): HTMLElement | null {
@@ -55,7 +56,13 @@ function createListDragController(store: StoreHandle): { attach: () => void; det
     }
   }
 
-  // 按整只容器重编 order；React 行缺省 order 为 0，只编该组会被缺省 0 的兄弟挤到后面。
+  /**
+   * 按整只容器重编 order；React 行缺省 order 为 0，只编该组会被缺省 0 的兄弟挤到后面。
+   *
+   * @param container 行所在的容器。
+   * @param want 目标组的 `data-lo-list-group` 值。
+   * @param sequence 预览后的该组行顺序，含被拖行。
+   */
   function previewOrder(container: HTMLElement, want: string, sequence: HTMLElement[]): void {
     const all = rowsOf(container);
     const next: HTMLElement[] = [];
@@ -75,7 +82,9 @@ function createListDragController(store: StoreHandle): { attach: () => void; det
     touched = next;
   }
 
-  // 行内 order 是预览脚手架，擦除推迟到下一帧，让 React 先按新顺序画完。
+  /**
+   * 行内 order 是预览脚手架，擦除推迟到下一帧，让 React 先按新顺序画完。
+   */
   function scheduleClearPreview(): void {
     if (touched.length === 0) return;
     const nodes = touched;
@@ -243,7 +252,9 @@ function createListDragController(store: StoreHandle): { attach: () => void; det
     });
   }
 
-  // 取消：预览未提交，行上的脚手架立刻擦掉。
+  /**
+   * 取消：预览未提交，行上的脚手架立刻擦掉。
+   */
   function onCancel(): void {
     const nodes = touched;
     touched = [];

@@ -1,6 +1,6 @@
 
+/** 样式表只注入一次；`removeStyles` 卸载时按 `data-plugin` 找出所有节点并移除。 */
 const CSS_TEXT: string[] = [
-  // ---- 官方行上的标记 ----
   "[data-lo-row='1']{position:relative}",
   "[data-lo-draggable='1']{cursor:grab;-webkit-user-select:none;user-select:none;transition:opacity .14s ease,box-shadow .12s ease,transform .14s ease}",
   "[data-lo-draggable='1']:active{cursor:grabbing}",
@@ -10,7 +10,6 @@ const CSS_TEXT: string[] = [
   // 官方块与第三方块之间的分割线：同为 body 级元素，按 scope 各存一份。
   ".lo-divider{background:var(--dsw-alias-border-l2);border-radius:2px}",
 
-  // ---- 浮层弹窗（右键菜单） ----
   // 描边用 box-shadow 而非 border；data-menu-material 是暗色主题钩子
   // 宽度贴内容：width:max-content、min-width:0、max-width:360px
   ".lo-pop{position:fixed;z-index:" + Z_MENU + ";box-sizing:border-box;width:max-content;min-width:0;max-width:360px;padding:4px;display:flex;flex-direction:column;gap:0;border:0;border-radius:var(--dsw-radius-lg,16px);isolation:isolate;--dsw-elevation-stroke-color:var(--dsw-alias-border-l1,#0000000a);box-shadow:var(--dsw-elevation-prominent,0 0 0 .5px var(--dsw-alias-border-l1,#0000000a),0 3px 8px 0 #0000000a,0 0 20px 0 #0000000d)}",
@@ -25,14 +24,12 @@ const CSS_TEXT: string[] = [
   ".lo-pop-icon svg{width:14px;height:14px}",
   ".lo-pop-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
 
-  // ---- 悬浮的收纳包启动器 ----
   // 位置全由行内样式给出：启动器可拖动，吸附到松手时所在的那条边。
   ".lo-launcher{position:fixed;z-index:" + Z_LAUNCHER + ";display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 11px;border:0;border-radius:999px;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-inverted,#fff);font:inherit;font-size:12px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.28);cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:box-shadow .14s ease,opacity .14s ease}",
   ".lo-launcher:hover{box-shadow:0 10px 26px rgba(0,0,0,.34)}",
   ".lo-launcher[data-dragging='1']{cursor:grabbing;opacity:.85;transition:none}",
   ".lo-launcher-count{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:rgba(127,127,127,.35);font-size:11px;line-height:1}",
 
-  // ---- 收纳包面板 ----
   ".lo-mask{position:fixed;inset:0;z-index:" + Z_MASK + ";background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,.32));backdrop-filter:blur(2px);animation:lo-fade .14s ease}",
   ".lo-stash{position:fixed;z-index:" + Z_STASH + ";top:50%;left:50%;transform:translate(-50%,-50%);width:min(440px,calc(100vw - 32px));max-height:min(74vh,620px);display:flex;flex-direction:column;border-radius:16px;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1);box-shadow:0 24px 64px rgba(0,0,0,.34);overflow:hidden;animation:lo-rise .16s ease}",
   ".lo-stash-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--dsw-alias-border-l1)}",
@@ -57,7 +54,6 @@ const CSS_TEXT: string[] = [
   ".lo-tag{flex:0 0 auto;padding:2px 7px;border-radius:999px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font-size:11px;white-space:nowrap}",
   ".lo-empty{padding:28px 20px;text-align:center;font-size:13px;line-height:1.6;color:var(--dsw-alias-label-secondary)}",
 
-  // ---- 设置页 ----
   // 负外边距收紧标题与导语的间距
   ".lo-page{display:flex;flex-direction:column;gap:14px;padding:2px 2px 12px}",
   ".lo-title{margin:0;line-height:1.3}",
@@ -128,7 +124,6 @@ const CSS_TEXT: string[] = [
   ".lo-note{padding:8px 14px;font-size:12px;line-height:1.6;color:var(--dsw-alias-label-secondary)}",
   ".lo-warn{margin:0;padding:9px 13px;border:1px solid var(--dsw-alias-state-warn-primary);border-radius:10px;font-size:12px;line-height:1.55;color:var(--dsw-alias-state-warn-primary)}",
 
-  // ---- 快捷键编辑器 ----
   ".lo-keyrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%}",
   ".lo-keyrow-end{margin-left:auto}",
   ".lo-keys{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-height:30px;min-width:120px;padding:0 12px;border:1px dashed var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-base);font-size:12px;color:var(--dsw-alias-label-primary);cursor:pointer;transition:border-color .12s ease,color .12s ease}",

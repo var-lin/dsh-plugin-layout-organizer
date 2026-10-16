@@ -5,7 +5,11 @@ function setActiveStore(store: StoreHandle | null): void {
   loActiveStore = store;
 }
 
-// 两步路径：先点弹层触发器露出菜单，再点菜单里的设置项（portal 在 <body> 末尾）；返回 false 表示无触发器可等。
+/**
+ * 设置入口的候选文案：locale 词条打头，中英文兜底，剔除空词条。
+ *
+ * @returns 按优先级排列的候选文案，用于在菜单项文本里做子串匹配。
+ */
 function settingsWord(): string[] {
   const label = t("nav");
   const words = [label, "设置", "Settings", "settings"];
@@ -22,6 +26,11 @@ function menuItems(): HTMLElement[] {
   return out;
 }
 
+/**
+ * 两步路径：先点弹层触发器露出菜单，再点菜单里的设置项（portal 在 <body> 末尾）；返回 false 表示无触发器可等。
+ *
+ * @returns 面板本来就在、或已点到菜单里的设置项时为 true；有触发器但菜单里没找到设置项时同样返回 true；一个触发器都找不到时为 false。
+ */
 function openSettingsPanel(): boolean {
   if (settingsPanel()) return true;
   let trigger = document.querySelector('[data-slot="sidebar.settings"] button') as HTMLElement | null;
@@ -59,7 +68,12 @@ function closeSettings(): void {
   if (mask) mask.click();
 }
 
-// 弹窗和导航行按需创建，轮询等待（id 精确匹配，标签兜底）；被收纳的设置行是 display:none，必须在点击期间显现。
+/**
+ * 弹窗和导航行按需创建，轮询等待（id 精确匹配，标签兜底）；被收纳的设置行是 display:none，必须在点击期间显现。
+ *
+ * @param id 设置项的投影 id，与行上的 `data-lo-id` 精确比对。
+ * @param label 该设置项的文案，行上没有 id 标记时按文案兜底匹配。
+ */
 function openSettingsSection(id: string, label: string): void {
   if (!openSettingsPanel()) {
     warn("open:" + id + " " + t("nav.failed").replace("{label}", label));
@@ -86,7 +100,12 @@ function openSettingsSection(id: string, label: string): void {
   window.setTimeout(attempt, 0);
 }
 
-// 合成 onClick 判不出来；没有可点后代时退回点行本身。
+/**
+ * 只认标签、role 和 onclick 属性；React 合成的 onClick 在 DOM 上没有痕迹，判不出来。
+ *
+ * @param el 待判定的元素。
+ * @returns 标签是表单/链接类控件、role 属可点角色、或带 onclick 属性时为 true。
+ */
 function isInteractive(el: HTMLElement): boolean {
   const tag = el.tagName;
   if (tag === "BUTTON" || tag === "A" || tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return true;
@@ -95,7 +114,12 @@ function isInteractive(el: HTMLElement): boolean {
   return el.hasAttribute("onclick");
 }
 
-// 行是按钮就点行；容器往里找第一个可点的后代（点容器等于对空气点），没有时退回点行本身。
+/**
+ * 行是按钮就点行；容器往里找第一个可点的后代（点容器等于对空气点），没有时退回点行本身。
+ *
+ * @param el 待点击的行。
+ * @returns 实际该点下去的元素：`el` 自身可点就是它，否则是第一个可点后代，都没有时仍是 `el`。
+ */
 function clickTargetOf(el: HTMLElement): HTMLElement {
   if (isInteractive(el)) return el;
   const nodes = el.querySelectorAll("button, a, [role='button'], [role='tab'], [role='menuitem'], [onclick]");
@@ -107,7 +131,11 @@ function clickTargetOf(el: HTMLElement): HTMLElement {
   return el;
 }
 
-// 显现必须作用在整行上：被点的常是行的后代，display:none 压在行上；属性在下一帧恢复。
+/**
+ * 显现必须作用在整行上：被点的常是行的后代，display:none 压在行上；属性在下一帧恢复。
+ *
+ * @param el 待点击的行；被收纳过时它的 `data-lo-hidden` 会被临时摘掉，点完下一帧补回。
+ */
 function clickRevealed(el: HTMLElement): void {
   const wasHidden = el.hasAttribute(MARKS.hidden);
   if (wasHidden) el.removeAttribute(MARKS.hidden);

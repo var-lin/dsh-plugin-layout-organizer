@@ -16,9 +16,14 @@ function createSurface(cls: string, z: number): HTMLElement {
   return el;
 }
 
-// ---- 官方 / 第三方分割线 ----
-
-// 行被祖先藏起来时返回真；只查 display:none / visibility:hidden
+/**
+ * 判断行是否被祖先藏起来。
+ *
+ * 行被祖先藏起来时返回真；只查 display:none / visibility:hidden
+ *
+ * @param el 待检查的行元素，从它自身开始向上查到 body 之前。
+ * @returns 自身或某个祖先为 display:none / visibility:hidden 时为真。
+ */
 function hiddenAway(el: HTMLElement): boolean {
   let node: HTMLElement | null = el;
   while (node && node !== document.body) {
@@ -39,7 +44,14 @@ function unionBox(a: Box, b: Box): Box {
   return { left: left, top: top, width: right - left, height: bottom - top };
 }
 
-// 往上取第一个有尺寸的祖先，找不到时退回并集
+/**
+ * 取行的外部容器盒子。
+ *
+ * 往上取第一个有尺寸的祖先；量不到由调用方 `showDivider` 退回与另一侧的并集。
+ *
+ * @param el 行元素，从它的父级开始向上找。
+ * @returns 第一个可见且有尺寸的祖先的矩形；一直找到 body 都没有时返回 null。
+ */
 function containerBox(el: HTMLElement): Box | null {
   let node = el.parentElement;
   while (node && node !== document.body) {
@@ -100,7 +112,11 @@ function hideAllDividers(): void {
   for (const scope in loDividerEls) hideDivider(scope);
 }
 
-// 分割线按实时几何量定位，滚动/改窗口尺寸后即失效：先藏起来，下一轮重画
+/**
+ * 隐藏所有分割线。
+ *
+ * 分割线按实时几何量定位，滚动/改窗口尺寸后即失效：先藏起来，下一轮重画
+ */
 function hideSurfaces(): void {
   hideAllDividers();
 }

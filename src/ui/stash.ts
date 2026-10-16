@@ -58,7 +58,7 @@ interface DragState {
 }
 
 function stashView(ctx: CtxLike, state: PluginState): StashItem[] {
-  const ledger: Record<string, { id: string; label: string; order: number }[]> = {};
+  const ledger: Record<string, LedgerEntry[]> = {};
   let i: number;
   let j: number;
   for (i = 0; i < SCOPES.length; i++) ledger[SCOPES[i].key] = readEntries(ctx, SCOPES[i].key);
@@ -69,15 +69,20 @@ function stashView(ctx: CtxLike, state: PluginState): StashItem[] {
     const item = entries[i];
     const spec = SCOPE_OF_KEY[item.scope];
     const list = ledger[item.scope] || [];
-    let entry: { id: string; label: string; order: number } | null = null;
+    let entry: LedgerEntry | null = null;
     for (j = 0; j < list.length; j++) if (list[j].id === item.id) entry = list[j];
+    // 名字优先取台账文案，其次取投影记下的名字（钩子文案或界面文字），最后才退回 id。
+    const label = entry && entry.hasLabel ? entry.label : liveRowLabel(item.scope, item.id) || hookLabel(item.scope, item.id) || (entry ? entry.label : "") || item.id;
+    // 「找不到这一行」= 该 scope 已投影过、但这一行不在屏幕上；此时只是不能导航过去，
+    // 恢复按钮照常可用（见 StashRow）。scope 没投影过时回退到「台账里有没有」。
+    const live = liveRowIds(item.scope);
     out.push({
       scope: item.scope,
       id: item.id,
       key: item.key,
-      label: entry ? entry.label : item.id,
+      label: label,
       kind: kindOf(state, item.scope, item.id),
-      missing: !entry,
+      missing: live ? live.indexOf(item.id) < 0 : !entry,
       scopeLabel: spec ? t(spec.labelKey) : item.scope,
       scopeIndex: SCOPE_KEYS.indexOf(item.scope),
       orderIndex: entry ? entry.order : 0
@@ -279,7 +284,12 @@ function closeStash(): void {
   stashFlag.set(false);
 }
 
-// 启动器吸附到一侧并保留垂直偏移；不做垂直吸附。
+/**
+ * 启动器吸附到一侧并保留垂直偏移；不做垂直吸附。
+ *
+ * @param props 上下文与状态句柄，见 StashLauncherProps。
+ * @returns 启动器按钮，`count > 0` 时带数量角标；`options.showStashLauncher` 为 false 时不渲染。
+ */
 function StashLauncher(props: StashLauncherProps): any {
   const ctx = props.ctx;
   const store = props.store;
@@ -441,7 +451,12 @@ function StashLauncher(props: StashLauncherProps): any {
   );
 }
 
-// portal 画进 <body>：官方浮层 z-index:20 的层叠上下文会把 slot 子元素压在设置弹窗(1000)之下
+/**
+ * portal 画进 <body>：官方浮层 z-index:20 的层叠上下文会把 slot 子元素压在设置弹窗(1000)之下
+ *
+ * @param props 上下文与状态句柄，见 StashSurfaceProps。
+ * @returns 启动器与（收纳包打开时的）面板，经 createPortal 挂到 body 上。
+ */
 function StashSurface(props: StashSurfaceProps): any {
   const pair = useState(stashFlag.get());
   const open = pair[0];

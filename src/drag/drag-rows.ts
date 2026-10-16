@@ -33,7 +33,12 @@ function rowsInScope(scope: string): HTMLElement[] {
   return out;
 }
 
-// 视觉顺序，也就是 `style.order`——容器一旦是被重排过的 flex 盒，树序就不再是屏上的顺序。
+/**
+ * 视觉顺序，也就是 `style.order`——容器一旦是被重排过的 flex 盒，树序就不再是屏上的顺序。
+ *
+ * @param scope 槽位 key。
+ * @returns 该 scope 的受管行，按 `style.order` 升序排列；order 相同的保持原本的树序。
+ */
 function visualRows(scope: string): HTMLElement[] {
   const rows = rowsInScope(scope);
   const keyed = rows.map(function (el, at) {
@@ -69,7 +74,12 @@ function rectsOf(rows: HTMLElement[], axis: string): DragRowRect[] {
   return out;
 }
 
-// 把该组既有的顺序值按预览序列重排——只重排不重算，本组恰好保住原本占用的数值槽位，集合之外不动。
+/**
+ * 把该组既有的顺序值按预览序列重排——只重排不重算，本组恰好保住原本占用的数值槽位，集合之外不动。
+ *
+ * @param nodes 该组当前的全部行，提供待重新分配的 order 槽位。
+ * @param sequence 预览后的行顺序；超出槽位数的尾部丢弃。
+ */
 function permuteOrder(nodes: HTMLElement[], sequence: HTMLElement[]): void {
   const slots: number[] = [];
   for (let i = 0; i < nodes.length; i++) slots.push(parseInt(nodes[i].style.order, 10) || 0);
@@ -81,13 +91,19 @@ function permuteOrder(nodes: HTMLElement[], sequence: HTMLElement[]): void {
   }
 }
 
-// `group` 为 `"all"` 表示官方与第三方混排，此时整条 scope 就是一个组。
+/**
+ * 把预览序列写回行内 `order`：`mixed`（混合排序）为真时整条 scope 就是一个组，否则只重排 `group` 这一组。
+ *
+ * @param scope 槽位 key。
+ * @param group 限定组（"official" / "third"）；`mixed` 为真时不生效。
+ * @param sequence 预览后的行顺序，含被拖行。
+ * @param mixed 是否按混合排序处理，通常传 `mixedOrder(store.get())`。
+ */
 function previewGroup(scope: string, group: string, sequence: HTMLElement[], mixed: boolean): void {
   const all = rowsInScope(scope);
-  // 混合排序下整条 scope 是一个可重排范围，不按 kind 分边。
   const mine: HTMLElement[] = [];
   if (mixed) {
-    // 整条 scope 一起重排：预览序列与槽位一一对应，不给 parseInt 撞值留机会。
+    // 预览序列与槽位一一对应，不给 parseInt 撞值留机会。
     for (let i = 0; i < all.length; i++) mine.push(all[i]);
   } else {
     for (let i = 0; i < all.length; i++) {
@@ -97,7 +113,15 @@ function previewGroup(scope: string, group: string, sequence: HTMLElement[], mix
   permuteOrder(mine, sequence);
 }
 
-// 落点表示成 `rects` 的下标；传入的是不含被拖行的组，结果就是 splice 位置，`dragged` 防护兼顾传完整列表的调用方。
+/**
+ * 落点表示成 `rects` 的下标；传入的是不含被拖行的组，结果就是 splice 位置，`dragged` 防护兼顾传完整列表的调用方。
+ *
+ * @param rects 参与插入点计算的行矩形。
+ * @param axis 轴向；本函数不读取，`mid` 已由 `rectsOf` 按轴向算好。
+ * @param pointer 指针在当前轴上的坐标。
+ * @param dragged 被拖行的 id；命中时跳过该行，不计数。
+ * @returns splice 位置：`pointer` 越过的行数。
+ */
 function insertionIndex(rects: DragRowRect[], axis: string, pointer: number, dragged: string): number {
   let index = 0;
   for (let i = 0; i < rects.length; i++) {
@@ -123,7 +147,14 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
   // 待执行的重算帧；0 表示本帧没有排队的重算。
   let rafId = 0;
 
-  // 找可拖行的三级兜底：closest → elementsFromPoint → 几何硬扫；pointer-events:none 的条带只有硬扫够得到。
+  /**
+   * 找可拖行的三级兜底：closest → elementsFromPoint → 几何硬扫；pointer-events:none 的条带只有硬扫够得到。
+   *
+   * @param target 指针事件的原始目标，非 Element 时直接放弃。
+   * @param x 指针横坐标；与 `y` 任一缺失时只走 closest 一级。
+   * @param y 指针纵坐标。
+   * @returns 命中的受管行；三级都落空时为 null。
+   */
   function rowFrom(target: EventTarget | null, x?: number, y?: number): HTMLElement | null {
     if (!target || !(target instanceof Element)) return null;
     const selector = "[" + MARKS.drag + '="1"][' + MARKS.id + "]";
@@ -137,7 +168,11 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
     return rowAtPoint(selector, x, y);
   }
 
-  // 这次拖动真正能重排的行：默认官方与第三方不跨分割线互换，另一组的几何量不参与插入点；混合排序（allowDragOfficial + mixGroups 同开）才放开到整条 scope。
+  /**
+   * 这次拖动真正能重排的行：默认官方与第三方不跨分割线互换，另一组的几何量不参与插入点；混合排序（allowDragOfficial + mixGroups 同开）或 group 为 "all" 时放开到整条 scope。
+   *
+   * @returns 本组按视觉顺序排列的行；混合排序或 `group` 为 "all" 时是整条 scope。
+   */
   function groupRows(): HTMLElement[] {
     const all = visualRows(scope);
     if (mixedOrder(store.get())) return all;
@@ -149,7 +184,9 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
     return mine;
   }
 
-  // `begin` 时拍一次快照：该组在拖动开始那一刻的顺序，含被拖那一行；`finish` 拿它当基准把预览序列并回 scope 的完整 id 顺序。
+  /**
+   * `begin` 时拍一次快照：该组在拖动开始那一刻的顺序，含被拖那一行；`finish` 拿它当基准把预览序列并回 scope 的完整 id 顺序。
+   */
   function snapshotGroup(): void {
     rects = rectsOf(groupRows(), axis);
     sequence = rects.map(function (rect) {
@@ -157,7 +194,11 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
     });
   }
 
-  // 必须在未施加预览的状态下测量，还要排除被拖行自己的盒子。
+  /**
+   * 测量本组除被拖行以外的行矩形：被拖行由调用方按落点 splice 回序列，不参与插入点计算。
+   *
+   * @returns 本组的行矩形，按当前视觉顺序排列。
+   */
   function measureRects(): DragRowRect[] {
     const mine: HTMLElement[] = [];
     const rows = groupRows();
@@ -193,7 +234,9 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
     });
   }
 
-  // 松手 / 滚动前把积压的那一帧补掉。
+  /**
+   * 松手提交前把积压的那一帧补掉，`finish` 才拿得到最新算出的预览序列。
+   */
   function flushUpdate(): void {
     if (!rafId) return;
     window.cancelAnimationFrame(rafId);
@@ -201,7 +244,11 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
     if (active && draggedEl) applyAt(lastPointer);
   }
 
-  // 拿一个指针坐标重算插入点并重画预览；指针移动和滚动都走这一条。
+  /**
+   * 拿一个指针坐标重算插入点并重画预览；指针移动和滚动都走这一条。
+   *
+   * @param pointer 指针在当前轴上的坐标。
+   */
   function applyAt(pointer: number): void {
     if (!draggedEl) return;
 
@@ -232,7 +279,7 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
     suppressClickUntil = Date.now() + LO_CLICK_SUPPRESS_MS;
     cleanup();
     if (!hasRealId) return;
-    // 顺序即落点：直接用松手那一刻的预览序列当真值，不回屏读 style.order——预览只重排过部分槽位，读回可能撞值或倒序，token-saver 拖不到第一就是这么丢的。
+    // 顺序即落点：直接用松手那一刻的预览序列当真值，不回屏读 style.order——预览只重排过部分槽位，读回可能撞值或倒序。
     const next: string[] = [];
     const all = visualRows(finalScope);
     const seen: Record<string, boolean> = {};
@@ -332,7 +379,9 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
     }
   }
 
-  // 滚动事件没有新的指针坐标，拿上一次的坐标重算即可（`onScroll` 用）。
+  /**
+   * 滚动事件没有新的指针坐标，拿上一次的坐标重算即可（`onScroll` 用）。
+   */
   function refreshRects(): void {
     if (active && draggedEl) applyAt(lastPointer);
   }

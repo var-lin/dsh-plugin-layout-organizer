@@ -1,10 +1,10 @@
 // 验收探针：读 `src/**` 源码做形态检查；产物由 test/smoke.mjs 与 test/navigate.mjs 覆盖。
-// 用法：node accept.mjs [pluginDir]
+// 用法：node test/accept.mjs [pluginDir]
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// 插件根目录由本文件位置推导，不用写死的绝对路径。
+// 插件根目录优先取命令行参数，否则由本文件位置推导，不用写死的绝对路径。
 const root = process.argv[2] ?? resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const S = join(root, "src");
 const rd = (n) => readFileSync(join(S, n), "utf8");
@@ -63,13 +63,14 @@ t("12 collapsible rows with rotating caret", /onToggleCollapse/.test(code) && /l
 t("13 context menu up/down/stash", /contextmenu/.test(code) && /openMenu/.test(code));
 t("14 wording is 按钮收纳包", locale.includes("按钮收纳包"));
 
-/* 合成 id 只能是合成行的身份，绝不能同时被登记成官方 id；重叠会让 reconcileOrder 把合成行
-   错当台账行参与分桶，使合成行排不到末尾。 */
+/* 合成 id 与官方 id 的重叠必须逐条报备：合成行没有台账条目，但分类上可以属于官方
+   （`composer:context-meter` 就是这种情况）。没报备的重叠说明有人把合成行当台账行写了。 */
 {
+  const ALLOWED_OVERLAP = ["composer:context-meter"];
   const officialStart = constants.indexOf("const OFFICIAL_IDS");
   const officialEnd = constants.indexOf("HIDDEN_LEDGER_IDS");
   const syntheticStart = constants.indexOf("const SYNTHETIC_IDS");
-  const syntheticEnd = constants.indexOf("LINKED_HIDE");
+  const syntheticEnd = constants.indexOf("// 一条记录的 DOM 认领钩子");
   const officialBlock = constants.slice(officialStart, officialEnd);
   const syntheticBlock = constants.slice(syntheticStart, syntheticEnd);
   const scopeKeys = ["sidebar", "footer", "tabs", "composer", "settings"];
@@ -86,9 +87,9 @@ t("14 wording is 按钮收纳包", locale.includes("按钮收纳包"));
     return [...line.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
   };
   const offenders = scopeKeys.flatMap((key) =>
-    listedOfficial(key).filter((id) => listedSynthetic(key).includes(id)).map((id) => `${key}:${id}`)
+    listedOfficial(key).filter((id) => listedSynthetic(key).includes(id) && !ALLOWED_OVERLAP.includes(`${key}:${id}`)).map((id) => `${key}:${id}`)
   );
-  t("15 synthetic ids are never official ids", offenders.length === 0, offenders.join(", "));
+  t("15 synthetic ids never claim ledger identity", offenders.length === 0, offenders.join(", "));
 }
 
 console.log(failed === 0 ? `\nACCEPT PASS (${total}/${total})` : `\nACCEPT FAIL (${failed} of ${total} failed)`);

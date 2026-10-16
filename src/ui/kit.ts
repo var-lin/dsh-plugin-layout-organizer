@@ -85,7 +85,12 @@ function useStoreTick(store: StoreLike): number {
   return tick;
 }
 
-// slot 账本没有 React 绑定，这里订阅各 slot 在变化时重渲染。
+/**
+ * slot 账本没有 React 绑定，这里订阅各 slot 在变化时重渲染。
+ *
+ * @param ctx 上下文，经 ctx.slots 订阅各槽位。
+ * @returns 递增的计数，供组件每次收到槽位变化后重新渲染。
+ */
 function useSlotsTick(ctx: CtxLike): number {
   const pair = useState(0);
   const tick = pair[0];
@@ -199,7 +204,15 @@ function Btn(props: BtnProps): any {
   }, props.children);
 }
 
-// 危险操作的两步确认：第一次点只上膛（换文案），三秒内再点一次才真正执行；超时自动解除。
+/**
+ * 危险操作的两步确认：第一次点只上膛（换文案），三秒内再点一次才真正执行；超时自动解除。
+ *
+ * @param props.label 初始按钮文案。
+ * @param props.confirmLabel 已上膛时的按钮文案。
+ * @param props.onConfirm 上膛状态下再次点击时执行的动作。
+ * @param props.variant 可选的按钮样式。
+ * @returns 按钮元素。
+ */
 function ConfirmBtn(props: { label: string; confirmLabel: string; onConfirm: () => void; variant?: string }): any {
   const pair = useState(false);
   const armed = pair[0];
@@ -226,7 +239,12 @@ function ConfirmBtn(props: { label: string; confirmLabel: string; onConfirm: () 
   }, armed ? props.confirmLabel : props.label);
 }
 
-// 管理列表里的一行；`self` 是插件自己的设置条目（色块颜色不同，其余行为一致）。
+/**
+ * 管理列表里的一行；`self` 是插件自己的设置条目（色块颜色不同，其余行为一致）。
+ *
+ * @param props 行数据与各动作回调，见 RowItemProps。
+ * @returns 列表行元素。
+ */
 function RowItem(props: RowItemProps): any {
   const entry = props.entry;
   return h("div", {

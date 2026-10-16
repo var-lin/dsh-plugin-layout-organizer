@@ -55,8 +55,7 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-/* ----图标素材 ------------------------------------------------------------
-   素材目录也是构建输入：.svg 为空、不是 <svg> 文档或没有 <path> 都算错，即使当前未被占位符引用。 */
+// assets/icons 随 npm 包发布且是构建输入，坏素材不该等占位符引用了才暴露，所以预扫描就校验空文件与缺失 <path>。
 const iconDir = join(root, "assets", "icons");
 
 function fail(message) {
@@ -136,10 +135,7 @@ const modules = BUILD_ORDER.map((rel) => {
 });
 
 const body = modules
-  .map(({ rel, code }) => {
-    const banner = `// ${"-".repeat(73)}\n// src/${rel}\n// ${"-".repeat(73)}`;
-    return `${banner}\n${code.trim()}`;
-  })
+  .map(({ rel, code }) => `// src/${rel}\n${code.trim()}`)
   .join("\n\n");
 
 // 这条横幅本身是块注释，里面不能出现能结束块注释的字符组合（如星号后跟斜杠），所以横幅写目录名而不是通配符。

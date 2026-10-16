@@ -20,3 +20,17 @@ src/.wprobe.txt
 # Stray files from mistyped commands
 0)inBlock
 console.log('ERR'
+
+# TypeScript 增量编译缓存
+*.tsbuildinfo
+
+# npm pack 本地验证产物（发版时可能产生）
+*.tgz
+
+# 防密钥误提交
+.env
+.env.*
+!.env.example
+
+# pnpm 本地依赖仓库
+.pnpm-store

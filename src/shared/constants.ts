@@ -59,12 +59,13 @@ for (let i = 0; i < SCOPES.length; i++) {
 }
 
 // 官方 id 在此显式列出；未列的一律算第三方，可在设置页重新分类。
-// context-meter 不在这里：它是合成 DOM 行（见 SYNTHETIC_IDS）。
+// context-meter（用量百分比）与 stats 同属官方停靠行；它不是 slot 记录、没有台账条目（见 SYNTHETIC_IDS），
+// 但分类上仍是官方的，两类记录各自收纳、互不牵连。
 const OFFICIAL_IDS: Record<string, string[]> = {
   sidebar: ["plugins", "schedules"],
   footer: [],
   tabs: ["chat", "trajectory"],
-  composer: ["stats"],
+  composer: ["stats", "context-meter"],
   settings: ["account", "general", "models", "plugins", "agent-presets"]
 };
 
@@ -76,10 +77,40 @@ const SYNTHETIC_IDS: Record<string, string[]> = {
   composer: ["context-meter"]
 };
 
-// stats 与 context-meter 永远一起隐藏和显示，避免只藏一半；恢复任意一个都带回这一对。
-const LINKED_HIDE: Record<string, Record<string, string[]>> = {
-  composer: { stats: ["context-meter"] }
+// 一条记录的 DOM 认领钩子：正证据，命中即认领，不参与按位置猜。
+interface RowHook {
+  // 只匹配这条记录渲染出来的根元素的选择器。
+  selector: string;
+  // 台账没给文案时拿来显示的稳定名字；钩子文案不参与按文字配对。
+  label?: string;
+}
+
+// 只给「按位置猜会猜错」的 scope 声明：输入框停靠行里有整条渲染成 null 的记录（供应商未登录、
+// 额度读数没开时的统计行），于是记录数与屏幕元素数对不上，按位置兜底会把身份错配给另一个插件。
+const ROW_HOOKS: Record<string, Record<string, RowHook>> = {
+  composer: {
+    // 官方统计药丸自带 data-composer-stats 钩子。
+    stats: { selector: "[data-composer-stats]" },
+    // token-saver 的条子：台账没有文案，显示名取它在界面上的品牌字样。
+    "save-token-strip": { selector: ".st-strip", label: "token-saver" },
+    // 两家供应商的额度读数：各有一个稳定的根类名，没渲染时钩子什么也匹配不到。
+    "dsh-connect-trae-stats-points": { selector: ".dsm-trae-composer-points", label: "Trae" },
+    "dsh-connect-workbuddy-stats-credits": { selector: ".dsm-workbuddy-composer-credits", label: "WorkBuddy" }
+  }
 };
+
+/**
+ * 取某条记录在本 scope 的认领钩子。
+ *
+ * @param scope scope 键。
+ * @param id 记录 id。
+ * @returns 声明过的钩子；没声明时返回 null。
+ */
+function rowHookOf(scope: string, id: string): RowHook | null {
+  const table = ROW_HOOKS[scope];
+  if (!table) return null;
+  return table[id] || null;
+}
 
 // 写在受管行上的属性名集中在一处：每个标记在 `applyScope` 设置、`clearMarks` 清除，样式表只针对这些属性。
 const MARKS = {
@@ -119,18 +150,40 @@ let __translator: (key: string) => string = function (key: string) {
 };
 let __reporter: (message: string, error?: unknown) => void = function () {};
 
+/**
+ * 取当前 locale 词条；没有注入翻译器时原样返回 key。
+ *
+ * @param key locale 词条名。
+ * @returns 当前语言下的文案。
+ */
 function t(key: string): string {
   return __translator(key);
 }
 
+/**
+ * 注入翻译器，由接线层在注册 locale 之后调用。
+ *
+ * @param fn 把 locale 词条名翻成当前语言的函数。
+ */
 function setTranslator(fn: (key: string) => string): void {
   __translator = fn;
 }
 
+/**
+ * 通过注入的上报器记一条告警；未注入时静默丢弃。
+ *
+ * @param message 告警正文。
+ * @param error 可选的异常对象，交给上报器决定怎么呈现。
+ */
 function warn(message: string, error?: unknown): void {
   __reporter(message, error);
 }
 
+/**
+ * 注入告警上报器，由接线层在启动时调用。
+ *
+ * @param fn 接收告警正文与可选异常的函数。
+ */
 function setReporter(fn: (message: string, error?: unknown) => void): void {
   __reporter = fn;
 }

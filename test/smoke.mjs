@@ -1,4 +1,4 @@
-/* 位置整理客户端包的 headless 冒烟测试：把包放到极简假 DOM/React/ctx 上求值并驱动注册、渲染、拆卸，
+/* 插件布局整理客户端包的 headless 冒烟测试：把包放到极简假 DOM/React/ctx 上求值并驱动注册、渲染、拆卸，
    抓拼接式多文件包里标识符未定义这类错误。
 
    用法：node test/smoke.mjs [path-to-lib/client.js]                                   */
@@ -9,8 +9,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const file = process.argv[2] || join(dirname(dirname(fileURLToPath(import.meta.url))), "lib", "client.js");
-
-// ---- 假 DOM ---------------------------------------------------------------
 
 function makeEl(tag) {
   const el = {
@@ -126,8 +124,6 @@ globalThis.cancelAnimationFrame = globalThis.window.cancelAnimationFrame;
 globalThis.setTimeout = globalThis.setTimeout;
 globalThis.localStorage = globalThis.window.localStorage;
 
-// ---- 假 React -------------------------------------------------------------
-
 const hookSlots = [];
 let hookIndex = 0;
 const React = {
@@ -167,8 +163,6 @@ function requireStub(spec) {
   if (spec === "react-dom/client") return ReactDOMClient;
   throw new Error("smoke: unexpected require(" + spec + ")");
 }
-
-// ---- 假 ctx ---------------------------------------------------------------
 
 const registrations = [];
 const injected = [];
@@ -276,8 +270,6 @@ const ctx = {
   }
 };
 
-// ---- 运行 ------------------------------------------------------------------
-
 let definition = null;
 globalThis.window.__ModuleLoader__ = {
   load(def) {
@@ -325,7 +317,7 @@ for (const reg of registrations) {
   }
 }
 
-// 把所有东西都拆卸一遍，把拆卸路径都走通。
+// 把每个 effect 的清理函数都跑一遍，拆卸路径抛错就判失败。
 for (const e of effects) {
   if (typeof e.dispose === "function") {
     try {

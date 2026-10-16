@@ -1,5 +1,3 @@
-// ---- 零散 DOM 辅助函数 ----
-
 function elementChildren(el: Element): HTMLElement[] {
   const out: HTMLElement[] = [];
   for (let i = 0; i < el.children.length; i++) out.push(el.children[i] as HTMLElement);
@@ -10,7 +8,12 @@ function outletOf(slotKey: string): HTMLElement | null {
   return document.querySelector('[data-slot="' + slotKey + '"]') as HTMLElement | null;
 }
 
-// 出口选择器以 scope 表声明的为准。
+/**
+ * 出口选择器以 scope 表声明的为准。
+ *
+ * @param scope scope 键。
+ * @returns 该 scope 的出口选择器；scope 表没声明时返回 null。
+ */
 function outletSelector(scope: string): string | null {
   const selector = OUTLET_OF_SCOPE[scope];
   if (!selector) return null;
@@ -23,9 +26,11 @@ function outletChildren(slotKey: string): HTMLElement[] | null {
   return elementChildren(outlet);
 }
 
-// ---- 各 scope 的行发现 ----
-
-// 行按钮是侧边栏出口的祖先：closest 从每个出口往上走到 nav.panelList 里真正的 flex 子项。
+/**
+ * 行按钮是侧边栏出口的祖先：closest 从每个出口往上走到 nav.panelList 里真正的 flex 子项。
+ *
+ * @returns 收上来的行按钮；一个都没找到时返回 null。
+ */
 function collectSidebarRows(): HTMLElement[] | null {
   const rows: HTMLElement[] = [];
   const outlets = document.querySelectorAll('[data-slot="sidebar.panellist"]');
@@ -49,7 +54,13 @@ function settingsPanel(): HTMLElement | null {
   return document.querySelector('[data-shortcut-modal="settings"]') as HTMLElement | null;
 }
 
-// 列表按结构去找：nav 下面直接子按钮最多的那个 div。
+/**
+ * 收集设置页导航里的行按钮。
+ *
+ * 列表按结构去找：nav 下面直接子按钮最多的那个 div。
+ *
+ * @returns 收上来的行按钮；设置面板不存在或一行都没找到时返回 null。
+ */
 function collectSettingsRows(): HTMLElement[] | null {
   const panel = settingsPanel();
   if (!panel) return null;
@@ -74,7 +85,12 @@ function collectFooterRows(): HTMLElement[] | null {
   return outletChildren("sidebar.footer.action");
 }
 
-// 声明了 outlet 选择器的 scope 的通用兜底，也是定制收集器一无所获时的最后手段。
+/**
+ * 声明了 outlet 选择器的 scope 的通用兜底，也是定制收集器一无所获时的最后手段。
+ *
+ * @param scope scope 键。
+ * @returns 出口的直接子元素，没有子元素时退回出口里像按钮的后代；出口或选择器缺失时返回 null。
+ */
 function collectOutletRows(scope: string): HTMLElement[] | null {
   const selector = outletSelector(scope);
   if (!selector) return null;
@@ -86,7 +102,13 @@ function collectOutletRows(scope: string): HTMLElement[] | null {
   return buttons.length > 0 ? (Array.prototype.slice.call(buttons) as HTMLElement[]) : null;
 }
 
-// 不查 conversation.view 出口：它渲染的是视图正文。
+/**
+ * 收集对话标签条上的标签按钮。
+ *
+ * 不查 conversation.view 出口：它渲染的是视图正文。
+ *
+ * @returns 收上来的标签按钮；一行都没找到时返回 null。
+ */
 function collectTabRows(): HTMLElement[] | null {
   const list = document.querySelector("[data-conversation-tabs]");
   if (!list) return collectOutletRows("tabs");
@@ -97,8 +119,6 @@ function collectTabRows(): HTMLElement[] | null {
   const deep = list.querySelectorAll('button[role="tab"], button');
   return deep.length > 0 ? (Array.prototype.slice.call(deep) as HTMLElement[]) : null;
 }
-
-// ---- 输入框：唯一带合成行的 scope ----
 
 // slot 记录 id 为 null（投影与台账配对），合成的带 id——用量百分比属于 slot 未注册的兄弟节点。
 interface RowUnit {
@@ -146,8 +166,6 @@ function collectComposerRows(): HTMLElement[] | null {
   return rows;
 }
 
-// ---- 分发 ----
-
 function collectRowUnits(scope: string): RowUnit[] | null {
   if (scope === "composer") return collectComposerUnits();
   const rows = collectRows(scope);
@@ -165,8 +183,6 @@ function collectRows(scope: string): HTMLElement[] | null {
   if (scope === "settings") return collectSettingsRows();
   return null;
 }
-
-// ---- 台账读取 ----
 
 // 侧边栏和底栏用 entriesOfSlot（它们的渲染器用的就是它），其余 scope 读原始 entries 数组。
 // 文案缺失（hasLabel 为假）可放心退回位置配对；文案存在却对不上才说明身份存疑（见 pairRows）。
@@ -213,9 +229,13 @@ function readEntries(ctx: CtxLike, scope: string): LedgerEntry[] {
   return out;
 }
 
-// ---- 几何量 ----
-
-// 轴向以 scope 表声明为准，测量只作兜底。
+/**
+ * 轴向以 scope 表声明为准，测量只作兜底。
+ *
+ * @param el 参与测量的行元素，从它的父级开始逐层向上找。
+ * @param scope scope 键，用于按投影标记圈出候选行。
+ * @returns 排布轴向："x" 或 "y"；找不到足够的有尺寸行时按 "y" 处理。
+ */
 function measureAxis(el: HTMLElement, scope: string): string {
   let node: HTMLElement | null = el.parentElement;
   let depth = 0;
@@ -248,8 +268,6 @@ function containerAxis(el: HTMLElement, scope: string): string {
   return measureAxis(el, scope);
 }
 
-// ---- 行的文案 ----
-
 function rowText(el: HTMLElement): string {
   const label = el.getAttribute && el.getAttribute("aria-label");
   if (label) return label;
@@ -260,13 +278,42 @@ function rowText(el: HTMLElement): string {
   return el.textContent || "";
 }
 
-// 三步退让：①上次投影的标记；②文案精确匹配；③没文案的按剩余顺序位置配对；④有文案没对上的只在行数少于记录数时补位。
-function pairRows(entries: LedgerEntry[], rows: HTMLElement[], stamped?: Record<string, HTMLElement>): Pair[] {
+/**
+ * 把台账记录与屏幕上的行配对。
+ *
+ * 四步退让：①声明过认领钩子的记录按钩子认领（正证据）；②上次投影的标记；③文案精确匹配；
+ * ④没文案的记录按剩余顺序位置配对——只在屏幕上不缺行（行数不少于记录数）时才敢这么猜。
+ *
+ * ④ 的例外是身份错配的根源：记录数多于屏幕元素数，说明有记录整条渲染成空，此时按位置猜会把
+ * 后面那条记录的名字扣到别人的元素上（见 `ROW_HOOKS`）。
+ *
+ * @param entries 该 scope 的台账记录。
+ * @param rows 屏幕上收集到的行元素。
+ * @param stamped 上次投影留下的 id → 元素映射，用于第 1 步直接认领；省略时跳过这一步。
+ * @param scope scope 键，用于查 `ROW_HOOKS` 里声明的认领钩子；省略时不走钩子那一步。
+ * @returns 与 entries 一一对应的配对结果，认领不到的行 el 保持为 null。
+ */
+function pairRows(entries: LedgerEntry[], rows: HTMLElement[], stamped?: Record<string, HTMLElement>, scope?: string): Pair[] {
   const pairs: Pair[] = [];
   const used: boolean[] = [];
   for (let i = 0; i < entries.length; i++) pairs.push({ id: entries[i].id, label: entries[i].label, el: null as unknown as HTMLElement, extra: [] });
 
-  // 第 0 步：按元素身上现存的 data-lo-id 直接认领。
+  // 第 0 步：钩子是正证据，优先级最高——它还能纠正上一次投影留下的错误标记。
+  if (scope) {
+    for (let i = 0; i < entries.length; i++) {
+      const hook = rowHookOf(scope, entries[i].id);
+      if (!hook || !hook.selector) continue;
+      for (let j = 0; j < rows.length; j++) {
+        if (used[j]) continue;
+        if (!rows[j].matches || !rows[j].matches(hook.selector)) continue;
+        pairs[i].el = rows[j];
+        used[j] = true;
+        break;
+      }
+    }
+  }
+
+  // 第 1 步：按元素身上现存的 data-lo-id 直接认领。
   if (stamped) {
     for (let i = 0; i < entries.length; i++) {
       const el = stamped[entries[i].id];
@@ -278,7 +325,7 @@ function pairRows(entries: LedgerEntry[], rows: HTMLElement[], stamped?: Record<
     }
   }
 
-  // 第 1 步：文案精确匹配（仅限真正提供了文案的记录）。
+  // 第 2 步：文案精确匹配（仅限真正提供了文案的记录）。
   for (let i = 0; i < entries.length; i++) {
     if (!entries[i].hasLabel) continue;
     for (let j = 0; j < rows.length; j++) {
@@ -291,30 +338,100 @@ function pairRows(entries: LedgerEntry[], rows: HTMLElement[], stamped?: Record<
     }
   }
 
-  // 第 2 步：没文案的记录按顺序认领剩下的行。
-  let next = 0;
-  for (let i = 0; i < entries.length; i++) {
-    if (entries[i].hasLabel || pairs[i].el) continue;
-    while (next < rows.length && used[next]) next++;
-    if (next >= rows.length) break;
-    used[next] = true;
-    pairs[i].el = rows[next];
-  }
-
-  // 第 3 步：只在行数少于记录数时补位，让多出来的行按 DOM 派生身份被收编。
-  if (rows.length >= entries.length) return pairs;
-  next = 0;
+  // 第 3 步：没文案的记录按顺序认领剩下的行，但只在「剩下的记录数 == 剩下的行数」时才敢猜：
+  // 两边数量不等，说明有记录整条渲染成空（或有行不属于任何记录），按位置猜必然把名字扣错人。
+  const freeEntries: number[] = [];
+  const freeRows: number[] = [];
+  for (let i = 0; i < entries.length; i++) if (!pairs[i].el) freeEntries.push(i);
+  for (let j = 0; j < rows.length; j++) if (!used[j]) freeRows.push(j);
+  if (freeEntries.length !== freeRows.length) return pairs;
+  let at = 0;
   for (let i = 0; i < entries.length; i++) {
     if (pairs[i].el) continue;
-    while (next < rows.length && used[next]) next++;
-    if (next >= rows.length) break;
-    used[next] = true;
-    pairs[i].el = rows[next];
+    pairs[i].el = rows[freeRows[at++]];
   }
   return pairs;
 }
 
-// 从投影的 style.order 读回屏幕上的顺序。
+// 一条被投影真正标记到的行：id 与给人看的名字，设置页与收纳包据此只列屏幕上存在的行。
+interface LiveRow {
+  id: string;
+  label: string;
+}
+
+/* 每个 scope 上一轮投影标记到的行。
+   - 从未投影过 → undefined，`liveRows` 报 null，调用方回退到台账（插件刚加载、页面还没挂载）；
+   - 投影过但此刻整个不在屏幕上 → null，调用方同样回退到台账；
+   - 投影过且在屏幕上 → 数组，调用方以它为准。 */
+const __liveRows: Record<string, LiveRow[] | null> = {};
+
+/**
+ * 记下某 scope 本轮投影标记到的行。
+ *
+ * @param scope scope 键。
+ * @param rows 本轮标记到的行；该 scope 此刻不在屏幕上时传 null。
+ */
+function setLiveRows(scope: string, rows: LiveRow[] | null): void {
+  __liveRows[scope] = rows;
+}
+
+/**
+ * 读某 scope 上一轮投影标记到的行。
+ *
+ * @param scope scope 键。
+ * @returns 标记到的行；该 scope 从未投影过或整个不在屏幕上时返回 null（调用方据此回退到台账）。
+ */
+function liveRows(scope: string): LiveRow[] | null {
+  const rows = __liveRows[scope];
+  return rows === undefined ? null : rows;
+}
+
+/**
+ * 读某 scope 上一轮投影标记到的行 id。
+ *
+ * @param scope scope 键。
+ * @returns id 列表；该 scope 不在屏幕上时返回 null。
+ */
+function liveRowIds(scope: string): string[] | null {
+  const rows = liveRows(scope);
+  if (!rows) return null;
+  const out: string[] = [];
+  for (let i = 0; i < rows.length; i++) out.push(rows[i].id);
+  return out;
+}
+
+/**
+ * 取某条屏幕上真实存在的行的显示名。
+ *
+ * @param scope scope 键。
+ * @param id 行 id。
+ * @returns 该行本轮投影时记下的名字；没有记录时返回空字符串。
+ */
+function liveRowLabel(scope: string, id: string): string {
+  const rows = liveRows(scope);
+  if (!rows) return "";
+  for (let i = 0; i < rows.length; i++) if (rows[i].id === id) return rows[i].label;
+  return "";
+}
+
+/**
+ * 台账没给文案时，用声明过的钩子文案兜底。
+ *
+ * @param scope scope 键。
+ * @param id 行 id。
+ * @returns 钩子里声明的显示名；没声明时返回空字符串。
+ */
+function hookLabel(scope: string, id: string): string {
+  const hook = rowHookOf(scope, id);
+  return hook && hook.label ? hook.label : "";
+}
+
+/**
+ * 从投影的 style.order 读回屏幕上的顺序。
+ *
+ * @param scope scope 键。
+ * @returns 去重后的 id 列表，按 order 升序排列。
+ */
 function liveOrder(scope: string): string[] {
   const nodes = document.querySelectorAll("[" + MARKS.scope + '="' + scope + '"][' + MARKS.id + "]");
   const rows: { id: string; order: number; at: number }[] = [];
@@ -332,7 +449,16 @@ function liveOrder(scope: string): string[] {
   return out;
 }
 
-// 几何兜底：pointer-events:none 的行不参与命中测试，只能按坐标硬扫，面积最小者胜；最上层是收纳包、菜单或官方弹窗时放弃。
+/**
+ * 按坐标在候选行里做几何命中测试。
+ *
+ * 几何兜底：pointer-events:none 的行不参与命中测试，只能按坐标硬扫，面积最小者胜；最上层是收纳包、菜单或官方弹窗时放弃。
+ *
+ * @param selector 候选行的选择器。
+ * @param x 视口横坐标。
+ * @param y 视口纵坐标。
+ * @returns 命中的行元素；最上层是收纳包、菜单或官方弹窗，或没有行覆盖该点时返回 null。
+ */
 function rowAtPoint(selector: string, x: number, y: number): HTMLElement | null {
   const stack = document.elementsFromPoint(x, y);
   if (stack.length > 0 && stack[0].closest('.lo-stash, .lo-pop, .lo-launcher, [role="dialog"], [role="menu"], [data-shortcut-modal]')) return null;
@@ -353,9 +479,11 @@ function rowAtPoint(selector: string, x: number, y: number): HTMLElement | null 
   return hit;
 }
 
-// ---- 外壳几何量 ----
-
-// 启动器不能上浮到顶部外壳之上：测量顶部外壳的下边缘作为纵向位置的下限。
+/**
+ * 启动器不能上浮到顶部外壳之上：测量顶部外壳的下边缘作为纵向位置的下限。
+ *
+ * @returns 顶部外壳下边缘再往下留 8 像素后的整数位置；测不到外壳时按 48 计算。
+ */
 function topInset(): number {
   let best = 0;
   const tabs = document.querySelector("[data-conversation-tabs]");
@@ -374,7 +502,15 @@ function clampLauncherY(y: number, height: number): number {
   return Math.max(min, Math.min(max, y));
 }
 
-// 横向只保证按钮完整留在窗口里，不吸附：拖动过程中它就是鼠标位置，贴哪一侧等松手再定。
+/**
+ * 把启动器的横向位置夹进窗口内。
+ *
+ * 横向只保证按钮完整留在窗口里，不吸附：拖动过程中它就是鼠标位置，贴哪一侧等松手再定。
+ *
+ * @param x 期望的横坐标。
+ * @param width 启动器宽度。
+ * @returns 夹紧后的横坐标，最小 8、最大不超过窗口右边缘减 8；x 不是有限数时返回 8。
+ */
 function clampLauncherX(x: number, width: number): number {
   let max = window.innerWidth - width - 8;
   if (max < 8) max = 8;

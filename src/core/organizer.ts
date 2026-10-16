@@ -24,7 +24,7 @@ function createOrganizer(ctx: CtxLike, store: StoreHandle, report: (message: str
         report("apply:" + scope, err);
       }
     }
-    // 投影已经落地：此后读 DOM 的地方（设置页顺序、拖动快照）都能看到结果。
+    // 投影已经落地：此后读 DOM 的地方（设置页的挂载判定、拖动快照）都能看到结果。
     notifyRevision();
     muted = true;
     window.setTimeout(function () {
