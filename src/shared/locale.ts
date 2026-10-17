@@ -2,6 +2,7 @@ const ZH: Record<string, string> = {
   "nav": "插件布局整理",
   "title": "插件布局整理",
   "subtitle": "重排、分组与收纳 DSH 各处界面上的按钮。改动只影响显示，不会卸载任何插件。",
+  "version.hint": "当前插件版本",
 
   "section.options": "通用设置",
   "section.stash": "按钮收纳包",
@@ -55,6 +56,7 @@ const ZH: Record<string, string> = {
   "action.openStash": "打开按钮收纳包",
   "action.close": "关闭",
   "action.goto": "打开对应页面",
+  "action.static": "这一行只是显示，没有可以打开的页面",
   "action.drag": "拖动排序",
   "action.export": "导出配置",
   "action.export.hint": "把顺序、分类与收纳导出成一个 JSON 文件",
@@ -106,6 +108,7 @@ const EN: Record<string, string> = {
   "nav": "Plugin layout organizer",
   "title": "Plugin layout organizer",
   "subtitle": "Reorder, group and stash buttons across the DSH interface. Changes affect display only — nothing is uninstalled.",
+  "version.hint": "Installed plugin version",
 
   "section.options": "General",
   "section.stash": "Button stash",
@@ -159,6 +162,7 @@ const EN: Record<string, string> = {
   "action.openStash": "Open the button stash",
   "action.close": "Close",
   "action.goto": "Open the matching page",
+  "action.static": "This row is display-only and has no page to open",
   "action.drag": "Drag to reorder",
   "action.export": "Export config",
   "action.export.hint": "Export ordering, kinds and stashed rows as one JSON file",

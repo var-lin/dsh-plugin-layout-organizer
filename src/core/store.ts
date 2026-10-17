@@ -320,6 +320,46 @@ function reconcileOrder(state: PluginState, scope: string, discovered: string[])
   return official.concat(third);
 }
 
+/**
+ * 一个 scope 是否有「恢复本组默认顺序」能清掉的东西。
+ *
+ * `resetScope` 只清两样：本 scope 的保存顺序与收纳记录（分类覆盖刻意保留，那是用户知识不是布局）。
+ * 两者都空时按钮无事可做——空卡片上留一个能点的恢复按钮只会让人以为它坏了——因此据此禁用。
+ *
+ * @param state 当前状态。
+ * @param scope 槽位 key。
+ * @returns 有保存顺序或有收纳行时为真。
+ */
+function scopeDirty(state: PluginState, scope: string): boolean {
+  if ((state.order[scope] || []).length > 0) return true;
+  const keys = Object.keys(state.hidden);
+  let i;
+  for (i = 0; i < keys.length; i++) if (keys[i].indexOf(scope + ":") === 0) return true;
+  return false;
+}
+
+/**
+ * 整个状态是否已经不是出厂值——「重置所有配置」是否还有事可做。
+ *
+ * 只比对 `resetAll` 真正会改写的那四样（order / kinds / hidden / options）；`stashSort` 不在其中，
+ * 它是收纳包的排序偏好，重置配置不会动它，因此也不该让它把按钮点亮。
+ *
+ * 键序是确定的，可以直接 `JSON.stringify`：`normalizeState` 按 SCOPES 顺序重建 `order`、按固定字段
+ * 顺序重建 `options`，而 `kinds` / `hidden` 的参照物是空对象——只要有键就必然判为有差异。
+ *
+ * @param state 当前状态。
+ * @returns 与出厂状态有差异时为真。
+ */
+function stateDirty(state: PluginState): boolean {
+  const fresh = defaultState();
+  return (
+    JSON.stringify(state.order) !== JSON.stringify(fresh.order) ||
+    JSON.stringify(state.kinds) !== JSON.stringify(fresh.kinds) ||
+    JSON.stringify(state.hidden) !== JSON.stringify(fresh.hidden) ||
+    JSON.stringify(state.options) !== JSON.stringify(fresh.options)
+  );
+}
+
 function stashCount(state: PluginState): number {
   return Object.keys(state.hidden).length;
 }

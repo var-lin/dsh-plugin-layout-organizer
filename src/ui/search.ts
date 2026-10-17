@@ -37,7 +37,7 @@ function normalizeQuery(raw: string): string {
  */
 function SearchBox(props: SearchBoxProps): any {
   return h("div", { className: "lo-search" },
-    h("span", { className: "lo-search-icon", "aria-hidden": "true" }, "\u2315"),
+    h(Icon, { svg: UI_ICON_SEARCH, className: "lo-search-icon", name: "search" }),
     h("input", {
       className: "lo-search-input",
       type: "text",
@@ -59,7 +59,7 @@ function SearchBox(props: SearchBoxProps): any {
           onClick: function () {
             props.onChange("");
           }
-        }, "\u00d7")
+        }, h(Icon, { svg: UI_ICON_CLOSE, name: "close" }))
       : null
   );
 }

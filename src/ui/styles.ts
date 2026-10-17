@@ -49,7 +49,12 @@ const CSS_TEXT: string[] = [
   ".lo-stash-body{flex:1 1 auto;min-height:0;overflow:auto;padding:4px 12px 14px;display:flex;flex-direction:column;gap:4px}",
   // 收纳包列表是固定高度的滚动区，行与分组标题都必须按内容定高。
   ".lo-stash-body>*{flex:0 0 auto}",
-  ".lo-stash-group{padding:12px 8px 6px;font-size:11px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}",
+  // 分组标题行：名称靠左，右侧是「恢复本组默认」；两端对齐靠 .lo-stash-group-title 的 flex:1。
+  ".lo-stash-group{display:flex;align-items:center;gap:10px;padding:12px 8px 6px;font-size:11px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}",
+  ".lo-stash-group-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  // 组标题上的恢复按钮比行内的更小：它是分组级的次级动作，不该和每行的「恢复」抢注意力。
+  // 字重压回 400：分组标题行是 600，按钮继承下来会显得加粗，和旁边的标题一样重。
+  ".lo-stash-group .lo-btn{flex:0 0 auto;min-height:22px;padding:0 8px;font-size:11px;font-weight:400;border-radius:6px;text-transform:none;letter-spacing:0}",
   ".lo-stash-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px}",
   ".lo-stash-row:hover{background:var(--dsw-alias-bg-layer-1)}",
   // 恢复按钮不参与收缩，也不换行：标签再长也只占它自己的量，名字那一侧自己打点。
@@ -63,11 +68,13 @@ const CSS_TEXT: string[] = [
   // 搜索行：独立一条，图标与清除按钮都不吃输入框的宽度。
   ".lo-search{display:flex;align-items:center;gap:8px;flex:0 0 auto;padding:7px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-base)}",
   ".lo-search:focus-within{border-color:var(--dsw-alias-brand-primary)}",
-  ".lo-search-icon{flex:0 0 auto;color:var(--dsw-alias-label-secondary);font-size:14px;line-height:1}",
+  ".lo-search-icon{color:var(--dsw-alias-label-secondary)}",
   ".lo-search-input{flex:1 1 auto;min-width:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;outline:none}",
   ".lo-search-input::placeholder{color:var(--dsw-alias-label-secondary)}",
-  ".lo-search-clear{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:14px;line-height:1;white-space:nowrap;cursor:pointer}",
+  ".lo-search-clear{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);line-height:1;white-space:nowrap;cursor:pointer}",
   ".lo-search-clear:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}",
+  // 放大镜的图形占空比约 85%，比同尺寸的关闭图标显得小，轻微放大让两者视觉等高。
+  ".lo-search-icon[data-ico='search']>svg{transform:scale(1.06)}",
 
   // 负外边距收紧标题与导语的间距
   ".lo-page{display:flex;flex-direction:column;gap:14px;padding:2px 2px 12px;box-sizing:border-box;height:100%;min-height:0}",
@@ -75,17 +82,28 @@ const CSS_TEXT: string[] = [
   ".lo-page>*{flex:0 0 auto}",
   ".lo-page>.lo-tabpane{flex:1 1 auto;min-height:0}",
   ".lo-title{margin:0;line-height:1.3}",
-  // 标题行：大标题靠左，导出 / 导入 / GitHub / 问题反馈四个按钮靠右。
+  // 标题行：大标题与版本号靠左相邻，导出 / 导入 / GitHub / 问题反馈四个按钮在同一行时靠右。
+  // 标题不设 flex:1——否则它会把中间的空白全吃掉，版本号被挤到最右、看起来像按钮组的一部分。
+  // 靠右不靠 .lo-titleacts 的 margin-left:auto：弹性盒换行后那一行只剩按钮，
+  // auto 外边距会把整组甩到右端、看起来像飘着；改由 .lo-titlegap 吃掉行内空白，
+  // 放得下就顶到最右，放不下按钮掉到第二行时从左边开始，与标题左边缘齐。
   ".lo-titlerow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}",
-  ".lo-titlerow .lo-title{flex:1 1 auto;min-width:0}",
+  ".lo-titlerow .lo-title{flex:0 0 auto;min-width:0}",
+  ".lo-titlegap{flex:1 1 auto;min-width:0}",
   ".lo-titleacts{flex:0 0 auto;display:flex;gap:8px}",
   // 标题行按钮比列表里的大一号：这是本页最主要的动作区，按下时不该比正文还轻。
   ".lo-titleacts .lo-btn{min-height:32px;padding:0 14px;gap:8px;font-size:12.5px;border-radius:9px}",
-  // 顶部导航：两项分页切换，点哪个只渲染那一组卡片。
-  ".lo-tabs{flex:0 0 auto;display:flex;gap:4px;padding:3px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-2)}",
-  ".lo-tab{flex:1 1 auto;min-height:28px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;white-space:nowrap;cursor:pointer;transition:background .12s ease,color .12s ease}",
-  ".lo-tab:hover{color:var(--dsw-alias-label-primary)}",
-  ".lo-tab[data-active='1']{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);box-shadow:0 1px 3px rgba(0,0,0,.16)}",
+  // 版本号是只读标签而不是按钮：不加边框与背景，只用次级文字色，避免和右侧四个按钮抢注意力。
+  ".lo-version{flex:0 0 auto;padding:2px 8px;border-radius:7px;background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06));color:var(--dsw-alias-label-secondary);font-size:11.5px;font-weight:600;letter-spacing:.02em;white-space:nowrap}",
+  // 顶部导航：药丸式分段控件，照抄 DSH 自家 SegmentedControl 的配方
+  // （_control_d62eq_11 / _indicator_d62eq_22 / _tab_d62eq_37）。
+  // 槽色是 --dsw-alias-interactive-bg-hover（浅色主题下 6% 深蓝叠加、读作浅灰），
+  // 不是 bg-base / bg-layer-1 / bg-layer-2——浅色主题里这三个别名全是同一个 #fff，用它们槽会消失。
+  // 药丸是 bg-layer-1 加 elevation-soft 阴影，浮在槽上；未选中项只有灰字，悬停才转近黑。
+  ".lo-tabs{flex:0 0 auto;display:flex;gap:2px;padding:4px;border:0;border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}",
+  ".lo-tab{flex:1 1 auto;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:34px;padding:0 18px;border:0;border-radius:var(--dsw-radius-sm,8px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13.5px;font-weight:500;white-space:nowrap;cursor:pointer;transition:color .12s ease}",
+  ".lo-tab:hover:not([data-active='1']){color:var(--dsw-alias-label-primary)}",
+  ".lo-tab[data-active='1']{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-weight:700;box-shadow:var(--dsw-elevation-soft,0 1px 3px rgba(0,0,0,.16))}",
   // 分页容器与滚动区：搜索行钉在顶部，只有卡片区滚动，滚动条因此不会跑出分页范围。
   ".lo-tabpane{display:flex;flex-direction:column;gap:12px;flex:1 1 auto;min-height:0}",
   ".lo-scroll{display:flex;flex-direction:column;gap:14px;flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding-right:4px;scrollbar-gutter:stable}",
@@ -107,6 +125,14 @@ const CSS_TEXT: string[] = [
   ".lo-lead{margin:-8px 0 -8px;font-size:12.5px;line-height:1.6;color:var(--dsw-alias-label-secondary)}",
   ".lo-card{border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1);overflow:hidden}",
   ".lo-card-head{padding:11px 14px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary)}",
+  // 标题行右侧动作区：卡片级动作（恢复本组默认顺序）放这里，比卡片底部那条更早被看见。
+  // 标题行恒为 flex 行：没有动作时只有 .lo-card-title 一个子项，外观与原来的纯文本标题一致。
+  ".lo-card-head{display:flex;align-items:center;gap:12px}",
+  ".lo-card-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  ".lo-card-action{flex:0 0 auto;display:flex;align-items:center;gap:8px}",
+  // 卡片标题上的恢复按钮比正文小一号：它是标题级次级动作，不跟标题抢视觉重量。
+  // 字重同样压回 400——卡片标题是 600，按钮继承会变粗。
+  ".lo-card-action .lo-btn{min-height:24px;padding:0 9px;font-size:11.5px;font-weight:400;border-radius:7px}",
   ".lo-card-body{display:flex;flex-direction:column}",
   // 卡片内部同理：字段行与行列表按内容定高，压缩只会让文字被裁掉。
   ".lo-card-body>*{flex:0 0 auto}",

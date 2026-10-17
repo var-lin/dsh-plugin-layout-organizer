@@ -42,6 +42,7 @@ t("01 launcher draggable / edge snap / top clamp", /onPointerMove/.test(code) &&
 t("01b no corner model left", !/launcherCorner|CORNERS/.test(code));
 t("02 stash sorting absent from the settings page", !/stashSort|SORT_MODES/.test(settings));
 t("03 engines.dsh declared for the market", pkg.engines?.dsh === ">=0.1.7-rc.2", String(pkg.engines?.dsh));
+t("03a node floor is 24", pkg.engines?.node === ">=24", String(pkg.engines?.node));
 t("03b no self-made dsh.engines field", pkg.dsh?.engines === undefined);
 t("03c host peer window covers every rc", Object.values(pkg.peerDependencies).every((r) => r === ">=0.1.7-rc.2 <0.3.0-0"));
 t("03d test script runs the whole suite", /test\/smoke\.mjs/.test(pkg.scripts?.test ?? "") && /test\/navigate\.mjs/.test(pkg.scripts?.test ?? "") && /test\/accept\.mjs/.test(pkg.scripts?.test ?? ""), pkg.scripts?.test);
@@ -71,6 +72,102 @@ t("14 wording is 按钮收纳包", locale.includes("按钮收纳包"));
   const pinned = [".lo-scroll>*{flex:00auto}", ".lo-page>*{flex:00auto}", ".lo-card-body>*{flex:00auto}", ".lo-rows>*{flex:00auto}", ".lo-stash-body>*{flex:00auto}"];
   const missing = pinned.filter((rule) => !flat.includes(rule));
   t("16 scroll panes never squeeze their children", missing.length === 0, missing.join(" "));
+}
+/* 分段导航的槽必须用宿主自己的 interactive-bg-hover。浅色主题里 bg-base / bg-layer-1 /
+   bg-layer-2 三个别名都解析到同一个 #fff，拿它们当槽色会让槽与面板同色、整条导航看不见边界。 */
+{
+  const flat = css.replace(/\s+/g, "");
+  const trough = flat.slice(flat.indexOf(".lo-tabs{"), flat.indexOf(".lo-tab{"));
+  t("17 tab trough uses the host hover token, not a white alias",
+    trough.includes("--dsw-alias-interactive-bg-hover") && !/background:var\(--dsw-alias-bg-(base|layer-1|layer-2)\)/.test(trough),
+    trough.slice(0, 120));
+}
+/* 搜索期间「打开按钮收纳包」是固定入口、没有可搜的名称或 id，必须整张让位。 */
+{
+  const flat = code.replace(/\s+/g, "");
+  t("18 stash entry card steps aside while searching",
+    /constlayoutBody:any\[\]=searching\?\[\]:\[/.test(flat),
+    flat.slice(flat.indexOf("constlayoutBody:any"), flat.indexOf("constlayoutBody:any") + 60));
+}
+
+/* 空状态下两个恢复按钮必须灰着：卡片没有保存顺序也没有收纳行时，「恢复本组默认顺序」无事可做；
+   整个状态还是出厂值时，「重置所有配置」同样无事可做。可点却毫无反应会让人以为按钮坏了。 */
+{
+  const flat = code.replace(/\s+/g, "");
+  t("19 scope reset knows when it has nothing to undo",
+    /functionscopeDirty\(state:PluginState,scope:string\):boolean\{/.test(flat) &&
+    /disabled:!scopeDirty\(state,scope\)/.test(flat),
+    flat.slice(flat.indexOf("disabled:!scopeDirty"), flat.indexOf("disabled:!scopeDirty") + 40));
+  t("20 global reset knows when it has nothing to undo",
+    /functionstateDirty\(state:PluginState\):boolean\{/.test(flat) &&
+    /disabled:!stateDirty\(state\)/.test(flat),
+    flat.slice(flat.indexOf("disabled:!stateDirty"), flat.indexOf("disabled:!stateDirty") + 40));
+}
+
+/* 卡片级动作（恢复本组默认顺序）必须在卡片标题行右侧，不再挂在卡片底部：
+   摆在列表末尾时，卡片越长越要先滚到底才能看见。 */
+{
+  const flat = code.replace(/\s+/g, "");
+  t("21 card action lives in the card head",
+    /interfaceCardProps\{title\?:any;action\?:any;/.test(flat) &&
+    /props\.action\?h\("span",\{className:"lo-card-action"\},props\.action\):null/.test(flat) &&
+    /action:h\(ConfirmBtn,\{label:t\("action\.reset"\)/.test(flat),
+    flat.slice(flat.indexOf("interfaceCardProps"), flat.indexOf("interfaceCardProps") + 50));
+}
+/* 收纳包按位置 / 种类分组时，标题行右侧带一个「恢复本组默认」；
+   按名称排序没有标题，因此不放按钮。 */
+{
+  const flat = code.replace(/\s+/g, "");
+  t("22 titled stash groups carry their own reset",
+    /className:"lo-stash-group-title"/.test(flat) &&
+    /disabled:!groupDirty\(state,group\)/.test(flat) &&
+    /constscopes=groupScopes\(group\);for\(letk=0;k<scopes\.length;k\+\+\)resetScope\(next,scopes\[k\]\);/.test(flat),
+    flat.slice(flat.indexOf("disabled:!groupDirty"), flat.indexOf("disabled:!groupDirty") + 40));
+}
+/* 大标题右侧的版本号必须与 package.json 逐字一致：改版本忘了同步这里会当场失败，
+   而不是悄悄显示旧号。 */
+t("23 version badge matches package.json",
+  constants.includes(`const PLUGIN_VERSION = "${pkg.version}"`) && /className: "lo-version"/.test(settings),
+  `constants=${/const PLUGIN_VERSION = "([^"]+)"/.exec(constants)?.[1]} pkg=${pkg.version}`);
+
+/* 搜索无命中的提示必须按数据算，不能看 `h(ScopeCard, …)` 的返回值：
+   `h()` 只是创建一个元素对象，永远为真——卡片返回 null 要等 React 渲染时才发生。
+   用元素真值判断会让「五张卡片全没命中」永远判成有命中，搜索结果显示成一片空白。 */
+{
+  const flat = code.replace(/\s+/g, "");
+  t("24 search hit test reads data, not element truthiness",
+    /functionscopeHit\(ctx:CtxLike,state:PluginState,scope:string,query:string\):boolean\{/.test(flat) &&
+    /if\(scopeHit\(ctx,state,SCOPES\[i\]\.key,query\)\)anyScopeHit=true;/.test(flat) &&
+    !/if\(scopeCards\[i\]\)anyScopeHit=true/.test(flat),
+    flat.slice(flat.indexOf("if(scopeHit(ctx,state,SCOPES"), flat.indexOf("if(scopeHit(ctx,state,SCOPES") + 60));
+}
+
+/* 界面上本来点不动的行（例如 token-saver 那种只读统计条）在收纳包里也必须不可点：
+   导航会关掉收纳包与设置弹窗，「可点却毫无反应」比灰着更像坏掉。
+   判据取界面本身（`rowClickable`）而不是位置名，因此换插件、换位置都不用改代码。 */
+{
+  const flat = code.replace(/\s+/g, "");
+  t("25 stash rows follow the real clickability of the row",
+    /functionrowClickable\(el:HTMLElement\):boolean\{/.test(flat) &&
+    /returnisInteractive\(el\)\|\|clickTargetOf\(el\)!==el;/.test(flat) &&
+    /if\(!liveRowIds\(scope\)\)returnfalse;/.test(flat) &&
+    /constnavigable=rowNavigable\(item\.scope,item\.id\);/.test(flat) &&
+    /navigable:navigable,/.test(flat),
+    flat.slice(flat.indexOf("functionrowClickable"), flat.indexOf("functionrowClickable") + 60));
+  t("26 inert stash rows never navigate or close the panel",
+    /if\(row\.missing\|\|!row\.navigable\)return;/.test(flat) &&
+    /constinert=row\.missing\|\|!row\.navigable;/.test(flat) &&
+    /disabled:inert,/.test(flat),
+    flat.slice(flat.indexOf("if(row.missing||!row.navigable)return;"), flat.indexOf("if(row.missing||!row.navigable)return;") + 50));
+}
+/* 标题行上的恢复按钮是次级动作，不该跟旁边的标题一样粗：
+   卡片标题与分组标题都是 600，按钮继承下来会显得加粗。 */
+{
+  const flat = css.replace(/\s+/g, "");
+  t("27 title-row reset buttons are not bold",
+    /\.lo-stash-group\.lo-btn\{[^}]*font-weight:400/.test(flat) &&
+    /\.lo-card-action\.lo-btn\{[^}]*font-weight:400/.test(flat),
+    flat.slice(flat.indexOf(".lo-stash-group.lo-btn"), flat.indexOf(".lo-stash-group.lo-btn") + 80));
 }
 
 /* 合成 id 与官方 id 的重叠必须逐条报备：合成行没有台账条目，但分类上可以属于官方

@@ -64,8 +64,12 @@ function SettingsPage(props: SettingsPageProps): any {
     scopeCards.push(h(ScopeCard, { key: SCOPES[i].key, ctx: ctx, store: store, scope: SCOPES[i].key, query: query }));
   }
   // 搜索时五张卡片可能全被过滤掉，此时给一句说明而不是空白。
+  // 命中判定走 ScopeCard 用的同一把尺子（scopeHit），两边规则一致才不会有「提示说没命中、
+  // 卡片却还在」这种自相矛盾的画面。
   let anyScopeHit = false;
-  for (i = 0; i < scopeCards.length; i++) if (scopeCards[i]) anyScopeHit = true;
+  for (i = 0; i < SCOPES.length; i++) {
+    if (scopeHit(ctx, state, SCOPES[i].key, query)) anyScopeHit = true;
+  }
   const searching = normalizeQuery(query).length > 0;
 
   const generalBody: any[] = [
@@ -171,13 +175,14 @@ function SettingsPage(props: SettingsPageProps): any {
           }
         })
       }),
-      // 全局重置：两步确认，误触不生效。
+      // 全局重置：两步确认，误触不生效。状态还是出厂值时按钮灰着——按下去什么也不会变。
       h(Field, {
         label: t("action.resetAll"),
         hint: t("action.resetAll.hint"),
         children: h(ConfirmBtn, {
           label: t("action.resetAll"),
           confirmLabel: t("action.confirmResetAll"),
+          disabled: !stateDirty(state),
           onConfirm: function () {
             store.update(function (next: PluginState) {
               const fresh = defaultState();
@@ -193,15 +198,19 @@ function SettingsPage(props: SettingsPageProps): any {
     h(ShortcutCard, { key: "shortcut", ctx: ctx, store: store })
   ];
 
-  const layoutBody: any[] = [
-    h(Card, { key: "stash", title: t("section.stash") },
-      h(Field, {
-        label: t("stash.title"),
-        hint: t("stash.count").replace("{count}", String(stashCount(state))),
-        children: h(Btn, { variant: "primary", onClick: props.onOpenStash }, t("action.openStash"))
-      })
-    )
-  ];
+  // 搜索时藏起「打开按钮收纳包」这张卡片：它是一条固定入口、没有可搜的名称或 id，
+  // 留着只会在结果列表最前面占掉一行，且「收纳包」这个词本身也搜不到它。
+  const layoutBody: any[] = searching
+    ? []
+    : [
+        h(Card, { key: "stash", title: t("section.stash") },
+          h(Field, {
+            label: t("stash.title"),
+            hint: t("stash.count").replace("{count}", String(stashCount(state))),
+            children: h(Btn, { variant: "primary", onClick: props.onOpenStash }, t("action.openStash"))
+          })
+        )
+      ];
   for (i = 0; i < scopeCards.length; i++) {
     if (scopeCards[i]) layoutBody.push(scopeCards[i]);
   }
@@ -228,6 +237,10 @@ function SettingsPage(props: SettingsPageProps): any {
   return h("div", { className: "lo-page" },
     h("div", { className: "lo-titlerow" },
       h("h2", { className: "lo-title" }, t("title")),
+      // 版本号贴着大标题：用户报问题时能直接念出来，不必再去插件列表里翻。
+      h("span", { className: "lo-version", title: t("version.hint") }, "v" + PLUGIN_VERSION),
+      // 弹性占位：放得下时把动作区顶到最右，换行后随按钮一起落到第二行左端。
+      h("span", { className: "lo-titlegap" }),
       h("div", { className: "lo-titleacts" },
         h(Btn, {
           icon: ACTION_ICON_EXPORT,

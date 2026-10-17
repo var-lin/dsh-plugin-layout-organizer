@@ -31,6 +31,8 @@ interface FieldProps {
 
 interface CardProps {
   title?: any;
+  // 标题行右侧的动作区（如「恢复本组默认顺序」）；不传就只有标题。
+  action?: any;
   children?: any;
 }
 
@@ -202,9 +204,23 @@ function Field(props: FieldProps): any {
   );
 }
 
+/**
+ * 带标题的卡片；标题行可选右侧动作区。
+ *
+ * 动作放在标题行而不是卡片底部：底部那一条会把「这张卡片能做什么」藏在列表之后，
+ * 卡片越长越难找到，而标题右侧是用户视线第一落点。
+ *
+ * @param props 标题、右侧动作与卡片内容，见 CardProps。
+ * @returns 卡片元素。
+ */
 function Card(props: CardProps): any {
   return h("section", { className: "lo-card" },
-    props.title ? h("header", { className: "lo-card-head" }, props.title) : null,
+    props.title || props.action
+      ? h("header", { className: "lo-card-head" },
+          props.title ? h("span", { className: "lo-card-title" }, props.title) : null,
+          props.action ? h("span", { className: "lo-card-action" }, props.action) : null
+        )
+      : null,
     h("div", { className: "lo-card-body" }, props.children)
   );
 }

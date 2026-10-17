@@ -1,5 +1,6 @@
 
 // `missing`：行被收纳了，但拥有它的页面此刻未挂载，打不开。
+// `navigable`：这一行在界面上本来就有可点的东西（见 rowNavigable）。纯展示的行两者都为假。
 interface StashItem {
   scope: string;
   id: string;
@@ -7,6 +8,7 @@ interface StashItem {
   label: string;
   kind: string;
   missing: boolean;
+  navigable: boolean;
   scopeLabel: string;
   scopeIndex: number;
   orderIndex: number;
@@ -76,6 +78,9 @@ function stashView(ctx: CtxLike, state: PluginState): StashItem[] {
     // 「找不到这一行」= 该 scope 已投影过、但这一行不在屏幕上；此时只是不能导航过去，
     // 恢复按钮照常可用（见 StashRow）。scope 没投影过时回退到「台账里有没有」。
     const live = liveRowIds(item.scope);
+    // 界面上点不动的行在收纳包里也不可点（见 rowNavigable）：token-saver 那样的纯展示条
+    // 点下去只会把收纳包和设置弹窗一起关掉，看起来像「按钮坏了」。
+    const navigable = rowNavigable(item.scope, item.id);
     out.push({
       scope: item.scope,
       id: item.id,
@@ -83,6 +88,7 @@ function stashView(ctx: CtxLike, state: PluginState): StashItem[] {
       label: label,
       kind: kindOf(state, item.scope, item.id),
       missing: live ? live.indexOf(item.id) < 0 : !entry,
+      navigable: navigable,
       scopeLabel: spec ? t(spec.labelKey) : item.scope,
       scopeIndex: SCOPE_KEYS.indexOf(item.scope),
       orderIndex: entry ? entry.order : 0
@@ -122,7 +128,48 @@ function groupStash(rows: StashItem[], mode: string): StashGroup[] {
 }
 
 /**
+ * 一组行覆盖到哪些位置。
+ *
+ * 按位置分组时只有一处；按种类分组时「官方」这一组可能横跨五个位置——
+ * 组标题上的恢复按钮因此按「这一组实际涉及的每一处」逐个恢复，而不是假装它只属于一处。
+ *
+ * @param group 收纳包里的一个分组。
+ * @returns 去重后的位置键列表。
+ */
+function groupScopes(group: StashGroup): string[] {
+  const seen: Record<string, boolean> = {};
+  const list: string[] = [];
+  let i: number;
+  for (i = 0; i < group.rows.length; i++) {
+    const scope = group.rows[i].scope;
+    if (!seen[scope]) {
+      seen[scope] = true;
+      list.push(scope);
+    }
+  }
+  return list;
+}
+
+/**
+ * 这一组覆盖的位置里，有没有哪一处还留着可以恢复的改动。
+ *
+ * @param state 当前插件状态。
+ * @param group 收纳包里的一个分组。
+ * @returns 有事可做则为 true；否则按钮灰着。
+ */
+function groupDirty(state: PluginState, group: StashGroup): boolean {
+  const scopes = groupScopes(group);
+  for (let i = 0; i < scopes.length; i++) {
+    if (scopeDirty(state, scopes[i])) return true;
+  }
+  return false;
+}
+
+/**
  * 收纳包里的一行：左侧整行是「打开对应页面」，右侧是「恢复」。
+ *
+ * 界面上本来点不动的行（见 rowNavigable）左侧同样灰着且不可点：点它什么也不会发生，
+ * 也不会顺手关掉收纳包——「可点却毫无反应」比灰着更像坏掉。
  *
  * 「恢复」只影响这一个按钮、且随时可以再收回来，所以是一点即恢复，不做两步确认；
  * 一次性改动整张列表的「全部恢复」才需要确认（见 StashPanel）。
@@ -132,12 +179,16 @@ function groupStash(rows: StashItem[], mode: string): StashGroup[] {
  */
 function StashRow(props: StashRowProps): any {
   const row = props.row;
+  const inert = row.missing || !row.navigable;
+  let hint = t("action.goto");
+  if (row.missing) hint = t("scope.missing");
+  else if (!row.navigable) hint = t("action.static");
   return h("div", { className: "lo-stash-row" },
     h("button", {
       type: "button",
       className: "lo-stash-main",
-      disabled: row.missing,
-      title: row.missing ? t("scope.missing") : t("action.goto"),
+      disabled: inert,
+      title: hint,
       onClick: function () {
         props.onOpen(row);
       }
@@ -198,6 +249,8 @@ function StashPanel(props: StashPanelProps): any {
   }
 
   function open(row: StashItem): void {
+    // 界面上本来点不动的行不进导航：导航会关掉收纳包与设置弹窗，等于「点了个寂寞还丢了位置」。
+    if (row.missing || !row.navigable) return;
     // 先抵达目标再关闭；设置行只存在于弹窗内，故跳过关闭，交给 `navigateTo`
     if (row.scope === "settings") {
       closeStash();
@@ -216,12 +269,30 @@ function StashPanel(props: StashPanelProps): any {
   let i: number;
   let j: number;
   for (i = 0; i < groups.length; i++) {
-    if (groups[i].title) body.push(h("div", { key: "g" + i, className: "lo-stash-group" }, groups[i].title));
-    for (j = 0; j < groups[i].rows.length; j++) {
-      (function (row: StashItem) {
-        body.push(h(StashRow, { key: row.key, row: row, onOpen: open, onRestore: restore }));
-      })(groups[i].rows[j]);
-    }
+    (function (group: StashGroup) {
+      // 有标题的分组在标题右侧带一个「恢复本组默认」；按名称排序（alpha）没有标题，也就不放按钮。
+      if (group.title) {
+        body.push(h("div", { key: "g" + i, className: "lo-stash-group" },
+          h("span", { className: "lo-stash-group-title" }, group.title),
+          h(ConfirmBtn, {
+            label: t("action.reset"),
+            confirmLabel: t("action.confirmResetGroup"),
+            disabled: !groupDirty(state, group),
+            onConfirm: function () {
+              store.update(function (next: PluginState) {
+                const scopes = groupScopes(group);
+                for (let k = 0; k < scopes.length; k++) resetScope(next, scopes[k]);
+              });
+            }
+          })
+        ));
+      }
+      for (j = 0; j < group.rows.length; j++) {
+        (function (row: StashItem) {
+          body.push(h(StashRow, { key: row.key, row: row, onOpen: open, onRestore: restore }));
+        })(group.rows[j]);
+      }
+    })(groups[i]);
   }
 
   return ReactDOM.createPortal(

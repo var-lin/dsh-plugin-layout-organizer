@@ -44,9 +44,9 @@ DSH renders plugin buttons into five places. This plugin treats all five the sam
   - the **keyboard shortcut** (desktop default `Ctrl/Cmd + Shift + O`; on the web `Ctrl/Cmd + Shift + Alt + O` on Windows / macOS and `Ctrl/Cmd + Shift + ,` on Linux; rebindable in Settings);
   - the **floating launcher** below the top bar at the right screen edge (drag it anywhere; on release it snaps to the nearer left/right edge and keeps its vertical offset);
   - Settings → **Plugin layout organizer** → the "Button stash" section.
-- Entries in the stash are **clickable**: "Plugin market" opens Settings on that page, a sidebar button selects that panel, a footer icon or conversation tab triggers the original button; a missing row offers "Open the page" instead.
+- Entries in the stash are **clickable**: "Plugin market" opens Settings on that page, a sidebar button selects that panel, a footer icon or conversation tab triggers the original button. **A row that is inert in the real UI — a read-only stats strip a plugin drops into the composer dock, say — is greyed out and unclickable here too**: it has no page to open, so clicking navigates nowhere and no longer closes the stash either.
 - The panel has a **fixed size** (`min(520px, 92vw)` wide, `min(720px, 84vh)` tall): title, search, sort chips and "Restore all" stay pinned, only the list scrolls, so a long list never grows the panel.
-- A **search box** at the top filters by name, id or location as you type; the × on its right clears it, and an unmatched list shows a hint instead.
+- A **search box** at the top filters by name, id or location as you type; a magnifier sits on its left and the × icon on its right clears it, and an unmatched list shows a hint instead.
 - Three sort modes: **by location / by official-third / by name**, plus a separate "Restore all" (two-step confirmation); a single row's "Restore" acts on the first click.
 - Each row reads "dot + name + location + restore"; long names are ellipsized and the **restore button never wraps**.
 
@@ -54,13 +54,13 @@ DSH renders plugin buttons into five places. This plugin treats all five the sam
 
 Settings → **Plugin Layout Organizer** (the same page is also mounted in this plugin's detail panel in the plugin manager):
 
-- **Top tab navigation**: two panes — **Layout** (the stash entry and the five location cards) and **General** (switches and the shortcut editor). Only the active pane renders; the scroll position and the search term survive switching.
-- **General**: allow dragging official buttons (child switch: mixing), show divider (child switches: the three locations), show the floating launcher, and a two-step "Reset every setting" that clears ordering, kinds, stash and every switch back to a fresh install. The two grouped rows own child switches: the master only gates them (they grey out while it is off), and clicking a grey child lights its path and switches the master on together.
-- **Title row**: export the whole configuration to a JSON file, import one back (a file with a non-matching schema version is rejected wholesale, never half-applied), open this project's GitHub repository, and open the repository's Issues page for **feedback**. The expand/collapse state of the grouped rows is remembered across reloads.
+- **Top tab navigation**: a pill-style segmented control matching DSH's own `SegmentedControl` palette — two items in a light grey rounded trough (`--dsw-alias-interactive-bg-hover`), the active one a raised pill (`--dsw-alias-bg-layer-1` with a `--dsw-elevation-soft` shadow and bold, near-black text), the inactive one plain grey text that only darkens on hover. Two panes — **Layout** (the stash entry and the five location cards) and **General** (switches and the shortcut editor). Only the active pane renders; the scroll position and the search term survive switching, and the stash entry card steps aside while a search is active.
+- **General**: allow dragging official buttons (child switch: mixing), show divider (child switches: the three locations), show the floating launcher, and a two-step "Reset every setting" that clears ordering, kinds, stash and every switch back to a fresh install. The two grouped rows own child switches: the master only gates them (they grey out while it is off), and clicking a grey child lights its path and switches the master on together. **The reset button is greyed out while the configuration is still factory-fresh** — pressing it would change nothing, and a live-looking button that does nothing reads as broken.
+- **Title row**: the installed version (e.g. `v1.2.1`) sits to the right of the heading; next to it are export (the whole configuration to a JSON file), import (a file with a non-matching schema version is rejected wholesale, never half-applied), this project's GitHub repository, and the repository's Issues page for **feedback**. The four buttons sit on the same line as the heading, flush right, while they fit; in a narrow window the group drops to a second line and **starts at the left, aligned with the heading's left edge** instead of being flung to the right with a gap in front of it. The expand/collapse state of the grouped rows is remembered across reloads.
 - **Shortcut**: record and restore the default, with text warnings for conflicting or unusable combinations.
-- **Button stash**: shows the current count and opens the panel.
-- **Search**: the Layout pane has a search box above the cards; it filters by button name or id as you type, drops a whole card when nothing in it matches, and clearing it (the × inside the field) brings everything back.
-- **Five location cards**: every button in that location, with drag, move up/down, official/third-party override, stash and restore; each card has its own two-step "Restore this group's default order".
+- **Button stash**: shows the current count and opens the panel. Grouped by location or by kind, every titled group carries its own "Reset this group's default" on the right of the heading — it clears the ordering and the stash of every location that group covers (the by-name sort has no group headings, so no button there), and it greys out when the group has nothing to undo. It is a secondary action: smaller than the heading, and not bold like the heading either.
+- **Search**: the Layout pane has a search box above the cards; it filters by button name or id as you type, drops a whole card when nothing in it matches (the stash entry card included), and clearing it (the × inside the field) brings everything back. The stash panel has the same search row.
+- **Five location cards**: every button in that location, with drag, move up/down, official/third-party override, stash and restore; each card carries its own two-step "Restore this group's default order" on the right of its heading — a secondary action, not bold — **greyed out while the card has neither a saved order nor a stashed row**: nothing to undo means nothing to click.
 - If a host service is missing the page degrades gracefully (e.g. no hotkey service means the stash relies on the floating launcher) and says why at the top of the page.
 
 ---
@@ -80,6 +80,8 @@ Refresh the page afterwards.
 ---
 
 ## Development
+
+Requires **Node.js `>=24`** (`engines.node` in `package.json`; the build leans on Node's own `module.stripTypeScriptTypes`, and both CI and the release workflow run Node 24).
 
 ```sh
 node build.mjs          # concatenate the BUILD_ORDER TS modules into lib/client.js, inlining assets/icons/
@@ -113,14 +115,14 @@ A client bundle may only `require` platform seed words or packages already regis
 - the list **is** the load-order declaration — later modules rely on top-level `var` / `function` definitions from earlier ones, so it is kept explicit rather than discovered by a directory walk (`types/globals.d.ts` is for the type checker only and is not concatenated);
 - TypeScript syntax is erased by Node's own `module.stripTypeScriptTypes` in `transform` mode, so there is no bundler and nothing to install;
 - the artifact is a single `lib/client.js` wrapped in `window.__ModuleLoader__.load({ id, factory })`;
-- `assets/icons/` holds the eleven icon SVGs downloaded from iconfont and is a **build input**: the sources never hand-write artwork, only `@@svg:file.svg@@` placeholders (`shared/icons.ts` for the six menu icons plus four title-row action icons, `core/dom-project.ts` for the Settings self icon as `@@svg:layout.svg@16@@`). `build.mjs` normalizes each asset — `viewBox` taken from the source file, `width`/`height` fixed to 14 unless the placeholder specifies a size (the four action icons use 16), hardcoded colors rewritten to `currentColor`, `aria-hidden` / `focusable` added — and inlines the `<svg>` into `lib/client.js`. The four action assets have very different internal padding, so `styles.ts` applies a per-name (`data-ico`) optical correction that makes one row of buttons look evenly weighted. `layout.svg` doubles as the package icon referenced by package.json's `"icon"`, and the directory is in the `files` whitelist so an installed package can rebuild.
+- `assets/icons/` holds the thirteen icon SVGs downloaded from iconfont and is a **build input**: the sources never hand-write artwork, only `@@svg:file.svg@@` placeholders (`shared/icons.ts` for the six menu icons, four title-row action icons and two search-row icons, `core/dom-project.ts` for the Settings self icon as `@@svg:layout.svg@16@@`). `build.mjs` normalizes each asset — `viewBox` taken from the source file, `width`/`height` fixed to 14 unless the placeholder specifies a size (the four action icons use 16, the search-row icons 13 and 12), hardcoded colors rewritten to `currentColor`, `aria-hidden` / `focusable` added — and inlines the `<svg>` into `lib/client.js`. The action assets have very different internal padding, so `styles.ts` applies a per-name (`data-ico`) optical correction that makes one row of buttons look evenly weighted. `layout.svg` doubles as the package icon referenced by package.json's `"icon"`, and the directory is in the `files` whitelist so an installed package can rebuild.
 
 | Module | Responsibility |
 | --- | --- |
 | `types/state.ts` | TypeScript shapes for the DSH services (slots / locale / layout / shortcuts) and this plugin's state; erased at build |
 | `types/globals.d.ts` | Global declarations for the build preamble (React, `h`, the hooks); type-check only, not concatenated |
 | `shared/constants.ts` | Plugin id, storage key, five-slot table, official id allow-list, DOM mark names, z-index constants |
-| `shared/icons.ts` | The six right-click menu icons plus four title-row action icons as `@@svg:…@@` build placeholders; normalized from `assets/icons/` and inlined at build time |
+| `shared/icons.ts` | The six right-click menu icons, four title-row action icons and two search-row icons as `@@svg:…@@` build placeholders; normalized from `assets/icons/` and inlined at build time |
 | `shared/locale.ts` | Chinese / English message dictionaries |
 | `core/store.ts` | State shape (v5), persistence, pure queries and commands (ordering, grouping, stashing) |
 | `core/dom-rows.ts` | Row discovery per slot, ledger reading, row labelling/pairing, geometry |

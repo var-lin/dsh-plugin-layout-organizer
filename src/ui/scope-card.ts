@@ -67,6 +67,41 @@ function scopeEntries(ctx: CtxLike, state: PluginState, scope: string): ScopeEnt
 }
 
 /**
+ * 搜索串是否命中一张位置卡片：标题命中算整张留下，否则看有没有某一行命中。
+ *
+ * 单独抽出来是因为设置页也要用同一把尺子判断「五张卡片是不是全都没命中」——
+ * 只有两边同规则，那句「没有匹配」的提示才和卡片实际的去留一致。
+ *
+ * @param entries 该位置要列的行。
+ * @param title 卡片标题（位置名）。
+ * @param query 已归一化的搜索串；空串恒真。
+ * @returns 命中则为 true。
+ */
+function entriesHit(entries: ScopeEntry[], title: string, query: string): boolean {
+  if (!query) return true;
+  if (hitQuery(title, query)) return true;
+  for (let i = 0; i < entries.length; i++) {
+    if (hitQuery(entries[i].label, query) || hitQuery(entries[i].id, query)) return true;
+  }
+  return false;
+}
+
+/**
+ * 同上，但按位置键自己取行；供设置页判断某一张卡片会不会留下。
+ *
+ * @param ctx 上下文，用于读取槽位台账。
+ * @param state 当前插件状态。
+ * @param scope 位置键。
+ * @param query 搜索串（可为原始串，本函数内部归一化）。
+ * @returns 命中则为 true。
+ */
+function scopeHit(ctx: CtxLike, state: PluginState, scope: string, query: string): boolean {
+  const spec = SCOPE_OF_KEY[scope];
+  if (!spec) return true;
+  return entriesHit(scopeEntries(ctx, state, scope), t(spec.labelKey), normalizeQuery(query || ""));
+}
+
+/**
  * 一个位置的排序卡片：可拖动排序的行、分类切换、收纳 / 恢复，以及「恢复本组默认顺序」。
  *
  * @param props 上下文、状态句柄与位置键，见 ScopeCardProps。
@@ -95,7 +130,7 @@ function ScopeCard(props: ScopeCardProps): any {
     if (hitAll || hitQuery(entries[i].label, query) || hitQuery(entries[i].id, query)) shown.push(entries[i]);
   }
   // 搜索没有命中这个位置时整张卡片让位，避免一屏空卡片。
-  if (query && !hitAll && shown.length === 0) return null;
+  if (!entriesHit(entries, title, query)) return null;
 
   const rows: any[] = [];
   // 混合排序打开时整条列表算一个组
@@ -151,21 +186,25 @@ function ScopeCard(props: ScopeCardProps): any {
     })(entry, id, kind, group, index, hidden, self);
   }
 
-  return h(Card, { title: title },
+  // 「恢复本组默认顺序」放在卡片标题右侧：它作用于整张卡片，属于标题级动作；
+  // 摆在列表末尾时，卡片越长越要先滚到底才能看见。
+  return h(Card, {
+    title: title,
+    action: h(ConfirmBtn, {
+      label: t("action.reset"),
+      confirmLabel: t("action.confirmResetGroup"),
+      // 这张卡片没有保存顺序、也没有收纳行时，恢复无事可做，按钮灰着而不是可点却毫无反应。
+      disabled: !scopeDirty(state, scope),
+      onConfirm: function () {
+        store.update(function (next: PluginState) {
+          resetScope(next, scope);
+        });
+      }
+    })
+  },
     mounted ? null : h("div", { className: "lo-note" }, t("scope.missing")),
     rows.length > 0
       ? h("div", { className: "lo-rows", "data-lo-list-scope": scope }, rows)
-      : h("div", { className: "lo-empty" }, query && !hitAll ? t("empty.search") : t("empty.list")),
-    h("div", { className: "lo-note" },
-      h(ConfirmBtn, {
-        label: t("action.reset"),
-        confirmLabel: t("action.confirmResetGroup"),
-        onConfirm: function () {
-          store.update(function (next: PluginState) {
-            resetScope(next, scope);
-          });
-        }
-      })
-    )
+      : h("div", { className: "lo-empty" }, query && !hitAll ? t("empty.search") : t("empty.list"))
   );
 }

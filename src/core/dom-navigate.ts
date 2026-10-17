@@ -147,6 +147,56 @@ function clickRevealed(el: HTMLElement): void {
   }
 }
 
+/**
+ * 按投影标记找这一行此刻在屏幕上的元素。
+ *
+ * @param scope 位置键。
+ * @param id 行的投影 id。
+ * @returns 打有 `data-lo-scope` / `data-lo-id` 且 id 相符的元素；该行当前不在屏幕上时为 null。
+ */
+function liveRowEl(scope: string, id: string): HTMLElement | null {
+  const stamped = document.querySelectorAll("[" + MARKS.scope + '="' + scope + '"][' + MARKS.id + "]");
+  for (let i = 0; i < stamped.length; i++) {
+    if (stamped[i].getAttribute(MARKS.id) === id) return stamped[i] as HTMLElement;
+  }
+  return null;
+}
+
+/**
+ * 这一行在界面上本来有没有可点的东西。
+ *
+ * 与 `clickTargetOf` 同一把尺子：行本身是可点控件，或行里能找到可点的后代，都算「本来就能点」。
+ * 纯展示的行（例如插件塞进停靠行的只读统计条）两样都不占，点它原本就毫无反应。
+ *
+ * @param el 待判定的行元素。
+ * @returns 界面上本来就能点为 true。
+ */
+function rowClickable(el: HTMLElement): boolean {
+  return isInteractive(el) || clickTargetOf(el) !== el;
+}
+
+/**
+ * 这一行在收纳包里点下去该不该有反应。
+ *
+ * 判据取自界面本身而不是位置名：界面上点不动的行，在收纳包里也不该可点——
+ * 可点却毫无反应，还顺手关掉收纳包与设置弹窗，比灰着更让人以为按钮坏了。
+ *
+ * 设置行是唯一的例外：设置弹窗按需打开，这一行此刻不在屏幕上也可能被导航到
+ * （先开弹窗再定位），因此只要它没被判成 missing 就仍然可点。
+ *
+ * @param scope 位置键。
+ * @param id 行的投影 id。
+ * @returns 点下去该有反应时为 true。
+ */
+function rowNavigable(scope: string, id: string): boolean {
+  if (scope === "settings") return true;
+  // 这一处整体没投影过（页面未挂载），没有元素可点。
+  if (!liveRowIds(scope)) return false;
+  const el = liveRowEl(scope, id);
+  if (!el) return false;
+  return rowClickable(el);
+}
+
 function navigateTo(ctx: CtxLike, scope: string, id: string): void {
   if (scope === "settings") {
     const entries = readEntries(ctx, scope);

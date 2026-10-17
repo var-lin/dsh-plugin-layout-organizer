@@ -1,4 +1,7 @@
 const PLUGIN_ID = "dsh-plugin-layout-organizer";
+// 设置页大标题右侧展示的版本号。必须与 package.json 的 version 逐字一致——
+// test/accept.mjs 会断言两处相等，改版本时忘了同步这里会当场失败，而不是悄悄显示旧号。
+const PLUGIN_VERSION = "1.2.1";
 const NS = "layout-organizer";
 const STORAGE_KEY = "dsh.layout-organizer.state.v5";
 const STATE_VERSION = 5;

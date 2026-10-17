@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-layout-organizer",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Reorder, separate and stash the buttons DSH renders in the sidebar, the sidebar footer, the conversation tabs, the composer dock and Settings — official and third-party alike.",
   "license": "MIT",
   "repository": {
@@ -78,7 +78,7 @@
     }
   },
   "engines": {
-    "node": ">=18",
+    "node": ">=24",
     "dsh": ">=0.1.7-rc.2"
   }
 }
