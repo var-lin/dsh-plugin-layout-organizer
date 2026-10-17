@@ -1,0 +1,41 @@
+# PR 校验：开 PR 或推送主分支时，跑一遍与发版完全相同的闸门——
+# 构建、语法检查、已提交的构建产物与源码一致、三个测试、源码类型检查。
+# 发布只发生在 publish.yml（推送 v* tag），本工作流不触碰 npm 与 Release。
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+# 同一分支的新提交顶掉上一次还在跑的校验，失败的那次不必排队等完。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: 构建
+        run: npm run build
+      # 构建产物是提交进仓库的，源码改了却忘记重新构建会在这一步失败。
+      - name: 语法检查 + 校验已提交的构建产物与源码一致
+        run: |
+          npm run check
+          git diff --exit-code -- lib/client.js
+      - name: 测试
+        run: npm test
+      # 类型检查依旧零依赖：不写进 package.json、不产生锁文件，按需下载固定版本。
+      # 版本与本地 tools/ts-check.mjs 吃的编辑器内置 TS 保持一致（6.0.3）。
+      - name: 类型检查
+        run: npx -y --package typescript@6.0.3 tsc -p tsconfig.json
