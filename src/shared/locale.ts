@@ -1,7 +1,7 @@
 const ZH: Record<string, string> = {
   "nav": "插件布局整理",
   "title": "插件布局整理",
-  "subtitle": "重排、分组与收纳 DSH 各处界面上的按钮。改动只影响显示，不会卸载任何插件。",
+  "subtitle": "对 DSH 投放到侧边栏顶部、侧边栏底部、对话标签、输入框停靠行与设置页导航的插件按钮做拖拽排序、官方/第三方分隔线与按钮收纳。只改变显示位置，不改动插件注册表。",
   "version.hint": "当前插件版本",
 
   "section.options": "通用设置",
@@ -107,7 +107,7 @@ const ZH: Record<string, string> = {
 const EN: Record<string, string> = {
   "nav": "Plugin layout organizer",
   "title": "Plugin layout organizer",
-  "subtitle": "Reorder, group and stash buttons across the DSH interface. Changes affect display only — nothing is uninstalled.",
+  "subtitle": "Drag-and-drop reordering, official/third-party dividers and a stash panel for the buttons DSH renders in the sidebar, the sidebar footer, the conversation tabs, the composer dock and Settings. Only display position changes; the plugin registry is untouched.",
   "version.hint": "Installed plugin version",
 
   "section.options": "General",

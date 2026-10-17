@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "dsh-plugin-layout-organizer",
-    "description": "Reorder, separate and stash the buttons DSH renders in the sidebar, the sidebar footer, the conversation tabs, the composer dock and Settings."
+    "description": "Drag-and-drop reordering, official/third-party dividers and a stash panel for the buttons DSH renders in the sidebar, the sidebar footer, the conversation tabs, the composer dock and Settings. Only display position changes; the plugin registry is untouched."
   }
 }
