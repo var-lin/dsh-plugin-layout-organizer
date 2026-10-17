@@ -83,6 +83,10 @@ node test/accept.mjs    # 源码形态验收探针
 
 （等价于 `npm run build` / `npm run check` / `npm test`。）
 
+### 持续集成
+
+开 PR 或推送 `master` 会触发 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)，跑一遍与发版相同的闸门：构建 → 语法检查 → 校验已提交的 `lib/client.js` 与源码一致 → 三个测试，最后再加一次类型检查（`npx -y --package typescript@6.0.3 tsc -p tsconfig.json`，版本与 `tools/ts-check.mjs` 用的编辑器内置 TS 一致，按需下载，不写进 `package.json`、不产生锁文件）；工作流只读，不发布也不建 Release。`screenshots/` 由插件市场从仓库直接读取，改动要一并提交。
+
 ### 发版
 
 推送 `v*` tag 即可，[`.github/workflows/publish.yml`](.github/workflows/publish.yml) 会自动构建、校验构建产物与源码一致、跑测试、发布到 npm（Trusted Publishing / OIDC，无需 token），并用 `tools/release-notes.mjs` 从 `CHANGELOG.md` 抽出对应段落创建同名 GitHub Release：

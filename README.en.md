@@ -86,6 +86,10 @@ node test/accept.mjs    # source-shape acceptance probe for the feedback items
 
 (Equivalent to `npm run build` / `npm run check` / `npm test`.)
 
+### Continuous integration
+
+Opening a pull request or pushing to `master` runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml), which applies the same gates as a release: build → syntax check → verify the committed `lib/client.js` matches the sources → the three tests, plus one type check (`npx -y --package typescript@6.0.3 tsc -p tsconfig.json`, the same version as the editor-bundled TypeScript used by `tools/ts-check.mjs`; fetched on demand, nothing added to `package.json` and no lockfile). The workflow is read-only — it neither publishes nor creates Releases. `screenshots/` is read straight from the repository by the plugin market, so changes there belong in the commit too.
+
 ### Releasing
 
 Push a `v*` tag and [`.github/workflows/publish.yml`](.github/workflows/publish.yml) builds, verifies the committed artifact matches the sources, runs the tests, publishes to npm (Trusted Publishing / OIDC, no token needed) and creates a GitHub Release of the same name whose notes come from the matching `CHANGELOG.md` section via `tools/release-notes.mjs`:
