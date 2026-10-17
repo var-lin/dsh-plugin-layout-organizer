@@ -3,6 +3,18 @@
 本项目的所有重要变更都记录在这里。
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [1.1.0] - 2026-10-17
+
+### 新增
+
+- **适配 DSH 0.2.1**：对话输入框停靠行的官方记录在新宿主里换了一轮身份——旧宿主注册 `stats` 与 `context-meter`，0.2.1 起改注册 `activity`（性能读数）与 `usage`（用量读数），DOM 钩子也从复数的 `data-composer-stats` 变成单数的 `data-composer-stat="activity"` / `"usage"`。不跟进的话，两个官方药丸会被判成第三方（分类、按种类排序、拖拽开关连带失准），正证据认领也打不中，于是退到按位置兜底——而这两条恰好都会整条渲染成 `null`，记录数与元素数不等时配对直接放弃，设置页与收纳包里就会留下有台账、没元素的幻影条目。
+- 官方 id 白名单与认领钩子改为**新旧并存**：`composer` 同时列出 `stats`、`context-meter`、`activity`、`usage`，钩子同时声明 `[data-composer-stats]` 与 `[data-composer-stat="activity"]`／`[data-composer-stat="usage"]`。多列一个在当轮宿主上不存在的 id 不影响判定（分类只查数组），两代选择器也各自只在自己那代宿主上命中，互不误伤。
+
+### 兼容性
+
+- 一份代码同时认两代宿主：`0.2.0-rc.2` 到 `0.2.1-rc.1` 的每个 `0.2.x` 构建都在支持范围内，不需要为版本切换装不同包。宿主的兼容闸门在插件声明了 `engines.dsh` 时**只看这一条**（peer 范围被忽略），而当前范围 `>=0.2.0-rc.2` 已含 `0.2.1-rc.1`，安装侧无需改动。
+- 其余契约实测未变，未作改动：五个 scope 的出口与 DOM 收集路径、`ctx.slots` 的 `register` / `inject` / `entries` / `entriesOfSlot` / `subscribe` / `getVersion`、`locale` 服务名、`shortcuts.register` 签名与重复 id 报错串、`shell.overlay` 与 `plugins.detail.section` 声明，以及三条第三方停靠行钩子（`.st-strip`、`.dsm-trae-composer-points`、`.dsm-workbuddy-composer-credits`）。
+
 ## [1.0.1] - 2026-10-16
 
 ### 修复
@@ -37,5 +49,6 @@
 - 官方 / 第三方分类依赖内置 id 白名单，因为槽位条目没有可靠的来源字段；任何行都可以在设置页手动改判。
 - 「收纳」不是卸载；被收纳的按钮只是隐藏，其插件仍在运行。
 
+[1.1.0]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.1.0
 [1.0.1]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.0.1
 [1.0.0]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.0.0

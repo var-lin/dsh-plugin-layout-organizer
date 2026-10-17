@@ -4,7 +4,7 @@
 
 A DSH client plugin that lets you **drag plugin buttons where you want them, draw a line between official and third-party entries, and stash the ones you rarely use**. It only changes where a button is *shown* — it never uninstalls, enables or disables a plugin.
 
-> Targets DSH `>=0.2.0-rc.2`.
+> Targets DSH `>=0.2.0-rc.2` (including `0.2.1` and later `0.2.x` builds).
 
 ---
 
@@ -140,7 +140,7 @@ A client bundle may only `require` platform seed words or packages already regis
 - **Ordering and hiding happen at the DOM layer; the plugin registry is not modified.** DSH sorts a slot's registry once, at `register()` time (`priority → order`); changing `order` afterwards does not re-sort it. This plugin therefore writes `style.order` and marker attributes onto the real DOM rows, which depends on the official UI structure and may need adapting after a major DSH upgrade.
 - **There is no authoritative "official vs third-party" field.** The `registrant` recorded in slot entries is unreliable (several third-party packages report the official marker), so this plugin ships an **allow-list of official ids** and lets you flip any row manually in Settings.
 - **"Stash" is not uninstall.** A stashed button is hidden; the plugin itself keeps running.
-- **The composer dock lists only rows that actually exist on screen.** Ledger records whose component renders `null` for the current round (stats readouts of a logged-out provider) do not appear in Settings or the stash panel and are never mistaken for another row by position; they are claimed by positive evidence instead — the official stats pill via its `data-composer-stats` hook, token-saver via `.st-strip`. The official stats (`stats`) and the 7% context meter (`context-meter`) stash independently, and the context meter counts as official.
+- **The composer dock lists only rows that actually exist on screen.** Ledger records whose component renders `null` for the current round (stats readouts of a logged-out provider) do not appear in Settings or the stash panel and are never mistaken for another row by position; they are claimed by positive evidence instead — the official pills via `data-composer-stats` (older hosts) or `data-composer-stat="activity"` / `"usage"` (`0.2.1` split the single pill into two), token-saver via `.st-strip`. The official readouts (the older `stats`, the newer `activity` and `usage`) and the 7% context meter (`context-meter`) stash independently, and the context meter counts as official.
 
 ---
 

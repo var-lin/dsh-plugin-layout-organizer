@@ -59,13 +59,15 @@ for (let i = 0; i < SCOPES.length; i++) {
 }
 
 // 官方 id 在此显式列出；未列的一律算第三方，可在设置页重新分类。
-// context-meter（用量百分比）与 stats 同属官方停靠行；它不是 slot 记录、没有台账条目（见 SYNTHETIC_IDS），
+// 停靠行的官方记录换过一轮身份：旧宿主注册 stats / context-meter，0.2.1 起注册 activity / usage。
+// 四个都列进官方，多列一个不存在的 id 不影响判定（kindOf 只是查数组），一份代码覆盖两代宿主。
+// context-meter（用量百分比）不是 slot 记录、没有台账条目（见 SYNTHETIC_IDS），
 // 但分类上仍是官方的，两类记录各自收纳、互不牵连。
 const OFFICIAL_IDS: Record<string, string[]> = {
   sidebar: ["plugins", "schedules"],
   footer: [],
   tabs: ["chat", "trajectory"],
-  composer: ["stats", "context-meter"],
+  composer: ["stats", "context-meter", "activity", "usage"],
   settings: ["account", "general", "models", "plugins", "agent-presets"]
 };
 
@@ -89,8 +91,12 @@ interface RowHook {
 // 额度读数没开时的统计行），于是记录数与屏幕元素数对不上，按位置兜底会把身份错配给另一个插件。
 const ROW_HOOKS: Record<string, Record<string, RowHook>> = {
   composer: {
-    // 官方统计药丸自带 data-composer-stats 钩子。
+    // 官方药丸的钩子。旧宿主把统计与用量合成一条、属性是复数 data-composer-stats；
+    // 0.2.1 起拆成 activity / usage 两条、属性改成单数 data-composer-stat="<id>"。
+    // 两代选择器并存：各自只在自己那代宿主上命中，互不误伤。
     stats: { selector: "[data-composer-stats]" },
+    activity: { selector: '[data-composer-stat="activity"]' },
+    usage: { selector: '[data-composer-stat="usage"]' },
     // token-saver 的条子：台账没有文案，显示名取它在界面上的品牌字样。
     "save-token-strip": { selector: ".st-strip", label: "token-saver" },
     // 两家供应商的额度读数：各有一个稳定的根类名，没渲染时钩子什么也匹配不到。
