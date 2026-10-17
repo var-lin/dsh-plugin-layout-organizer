@@ -9,12 +9,12 @@ DSH 客户端插件「插件布局整理」（`dsh-plugin-layout-organizer`）�
 ## 关键目录结构
 
 - `src/types/` —— 全局类型：`state.ts`（StateOptions / PluginState / StoreHandle 等）与 `globals.d.ts`（构建前言注入的 `h`、React、各 hook 声明）
-- `src/shared/` —— 常量、中英文案、右键菜单图标（`icons.ts`，六个 `@@svg:…@@` 构建占位符）
+- `src/shared/` —— 常量、中英文案、图标占位符（`icons.ts`：六个右键菜单图标 + 四个标题行动作图标的 `@@svg:…@@` 构建占位符）
 - `src/core/` —— 状态存储、DOM 行发现 / 分隔线 / 右键菜单 / 投影（设置行自身图标同样是 `@@svg:layout.svg@16@@` 占位符）/ 重新打开、调度中枢。投影每轮把真正标记到的行记进 `liveRows`（`dom-rows.ts`），设置页与收纳包据此只列屏幕上存在的行；输入框停靠行里渲染成空的台账记录靠 `ROW_HOOKS`（`shared/constants.ts`）的正证据认领，不按位置猜
 - `src/drag/` —— 指针拖拽控制器
-- `src/ui/` —— 样式注入、React 基础控件、配置导入导出（`config-actions.ts`）、设置页、按钮收纳包面板
+- `src/ui/` —— 样式注入、React 基础控件（`kit.ts`，含 `Icon`）、搜索框（`search.ts`）、配置导入导出（`config-actions.ts`）、设置页外壳（`settings-page.ts`，顶部分页导航）与拆出的单张位置卡片（`scope-card.ts`）、快捷键编辑器（`shortcut-card.ts`）、按钮收纳包面板（`stash.ts`）
 - `src/main.ts` —— 接线层（注册槽位、快捷键、样式、locale、清理）
-- `assets/icons/` —— 从 iconfont 下载的 7 个 SVG 源文件（arrow-up / arrow-down / arrow-left / arrow-right / archive / unarchive / layout），是**构建输入**：`src/` 里的占位符构建时按素材归一化（viewBox 取源文件、宽高默认 14、颜色改 currentColor、补 aria / focusable）成 `<svg>` 内联进 `lib/client.js`；`layout.svg` 另外是 package.json `"icon"` 指向的包图标；该目录在 `files` 白名单里随包发布，装包后可以重新构建
+- `assets/icons/` —— 从 iconfont 下载的 11 个 SVG 源文件（菜单用 arrow-up / arrow-down / arrow-left / arrow-right / archive / unarchive / layout，标题行用 export / import / github / feedback），是**构建输入**：`src/` 里的占位符构建时按素材归一化（viewBox 取源文件、宽高默认 14、占位符可指定尺寸——标题行四个动作图标为 16、颜色改 currentColor、补 aria / focusable）成 `<svg>` 内联进 `lib/client.js`；四份动作素材画布留白差别大，`styles.ts` 按 `data-ico` 做光学校正。`layout.svg` 另外是 package.json `"icon"` 指向的包图标；该目录在 `files` 白名单里随包发布，装包后可以重新构建
 - `lib/client.js` —— 构建产物（单文件，`window.__ModuleLoader__.load` 包裹）
 - `screenshots/` 与根目录 `screenshots.json` —— 插件市场详情页展示的截图（1-8 张，路径相对 `screenshots.json`，不得以 `/` 开头或含 `..`）。市场直接从仓库读取，不在 `files` 白名单里，不随 npm 包发布
 - `test/` —— 三个测试：`smoke.mjs`（无头冒烟）、`navigate.mjs`（设置两步路由行为）、`accept.mjs`（源码形态验收探针）

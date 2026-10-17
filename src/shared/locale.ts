@@ -7,6 +7,11 @@ const ZH: Record<string, string> = {
   "section.stash": "按钮收纳包",
   "section.shortcut": "快捷键",
 
+  "tab.general": "通用设置",
+  "tab.layout": "位置管理",
+  "search.placeholder": "搜索按钮名称或 id",
+  "search.clear": "取消搜索",
+
   "scope.sidebar": "侧边栏顶部按钮",
   "scope.footer": "侧边栏底部按钮",
   "scope.tabs": "对话标签顶部按钮",
@@ -57,9 +62,15 @@ const ZH: Record<string, string> = {
   "action.import.hint": "用之前导出的 JSON 文件覆盖当前配置",
   "action.github": "GitHub",
   "action.github.hint": "打开本项目的 GitHub 仓库",
+  "action.feedback": "问题反馈",
+  "action.feedback.hint": "在 GitHub Issues 里报告问题或提建议",
   "action.resetAll": "重置所有配置",
   "action.resetAll.hint": "清空顺序、分类、收纳与全部开关，恢复到初次安装的状态。",
   "action.confirm": "再点一次确认",
+  "action.confirmRestore": "再点一次恢复",
+  "action.confirmResetGroup": "再点一次恢复本组",
+  "action.confirmResetAll": "再点一次重置",
+  "action.confirmImport": "再点一次导入",
 
   "note.exported": "配置已导出。",
   "note.importOk": "导入成功，配置已更新。",
@@ -67,6 +78,7 @@ const ZH: Record<string, string> = {
 
   "empty.stash": "按钮收纳包里还没有内容。在任意按钮上右键，选择「收纳」即可放进来。",
   "empty.list": "这里还没有按钮。",
+  "empty.search": "没有匹配的按钮。清空搜索框即可看到全部。",
 
   "stash.title": "按钮收纳包",
   "stash.launcher": "按钮收纳包",
@@ -98,6 +110,11 @@ const EN: Record<string, string> = {
   "section.options": "General",
   "section.stash": "Button stash",
   "section.shortcut": "Shortcut",
+
+  "tab.general": "General",
+  "tab.layout": "Layout",
+  "search.placeholder": "Search button name or id",
+  "search.clear": "Clear search",
 
   "scope.sidebar": "Sidebar top buttons",
   "scope.footer": "Sidebar bottom buttons",
@@ -149,9 +166,15 @@ const EN: Record<string, string> = {
   "action.import.hint": "Replace the current config with a previously exported JSON file",
   "action.github": "GitHub",
   "action.github.hint": "Open this project's GitHub repository",
+  "action.feedback": "Feedback",
+  "action.feedback.hint": "Report a problem or suggest an idea on GitHub Issues",
   "action.resetAll": "Reset every setting",
   "action.resetAll.hint": "Clears ordering, kinds, stashed rows and every switch back to a fresh install.",
   "action.confirm": "Click again to confirm",
+  "action.confirmRestore": "Click again to restore",
+  "action.confirmResetGroup": "Click again to reset",
+  "action.confirmResetAll": "Click again to reset",
+  "action.confirmImport": "Click again to import",
 
   "note.exported": "Configuration exported.",
   "note.importOk": "Imported; the configuration is updated.",
@@ -159,6 +182,7 @@ const EN: Record<string, string> = {
 
   "empty.stash": "The button stash is empty. Right-click any button and choose Stash to put it here.",
   "empty.list": "No buttons here yet.",
+  "empty.search": "No matching buttons. Clear the search box to see everything.",
 
   "stash.title": "Button stash",
   "stash.launcher": "Button stash",

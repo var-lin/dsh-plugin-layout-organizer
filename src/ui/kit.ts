@@ -46,8 +46,35 @@ interface BtnProps {
   size?: string;
   disabled?: boolean;
   title?: string;
+  // 两步确认的「已上膛」状态，只由 ConfirmBtn 传；样式表据此染色。
+  armed?: boolean;
+  // 文案前的图标（构建期内联的 <svg> 文档），见 Icon。
+  icon?: string;
+  // 图标的素材名（形如 "github"），样式表据它做光学校正，见 Icon。
+  iconName?: string;
   onClick?: (event: any) => void;
   children?: any;
+}
+
+/**
+ * 把构建期内联的 `<svg>` 文档渲染成图标。
+ *
+ * React 不接受把字符串当元素渲染，而构建产物里的图标就是一段 `<svg>…</svg>` 文本，
+ * 因此走 `dangerouslySetInnerHTML`——内容全部来自本包自己的 `assets/icons/`，不含任何用户数据。
+ *
+ * @param props.svg 归一化后的完整 `<svg>` 文档。
+ * @param props.className 额外的类名。
+ * @param props.name 素材名；不同素材的画布留白差异很大（导出/导入几乎顶满，GitHub 只占 84%），
+ *   样式表按 `data-ico` 逐个微调盒子，让一排按钮的图标看起来一样大。
+ * @returns 图标容器元素。
+ */
+function Icon(props: { svg: string; className?: string; name?: string }): any {
+  return h("span", {
+    className: "lo-ico" + (props.className ? " " + props.className : ""),
+    "data-ico": props.name || undefined,
+    "aria-hidden": "true",
+    dangerouslySetInnerHTML: { __html: props.svg }
+  });
 }
 
 interface RowEntry {
@@ -198,10 +225,11 @@ function Btn(props: BtnProps): any {
     className: "lo-btn",
     "data-variant": props.variant || undefined,
     "data-size": props.size || undefined,
+    "data-armed": props.armed ? "1" : undefined,
     disabled: props.disabled === true,
     title: props.title || undefined,
     onClick: props.onClick
-  }, props.children);
+  }, props.icon ? h(Icon, { svg: props.icon, name: props.iconName }) : null, props.children);
 }
 
 /**
@@ -211,12 +239,21 @@ function Btn(props: BtnProps): any {
  * @param props.confirmLabel 已上膛时的按钮文案。
  * @param props.onConfirm 上膛状态下再次点击时执行的动作。
  * @param props.variant 可选的按钮样式。
+ * @param props.title 可选的悬停提示，上膛时保留原提示（文案已在按钮上变化）。
+ * @param props.disabled 为真时按钮变灰且不响应点击。
+ * @param props.icon 文案前的图标（构建期内联的 <svg> 文档）。
+ * @param props.iconName 图标素材名，用于按素材做光学校正。
  * @returns 按钮元素。
  */
-function ConfirmBtn(props: { label: string; confirmLabel: string; onConfirm: () => void; variant?: string }): any {
+function ConfirmBtn(props: { label: string; confirmLabel: string; onConfirm: () => void; variant?: string; title?: string; disabled?: boolean; icon?: string; iconName?: string }): any {
   const pair = useState(false);
   const armed = pair[0];
   const setArmed = pair[1];
+  // 先上膛、后变灰时要把膛线卸掉，否则「看不见的已上膛」会在条件恢复后立刻生效。
+  const disabled = props.disabled === true;
+  useEffect(function () {
+    if (disabled && armed) setArmed(false);
+  }, [disabled]);
   useEffect(function () {
     if (!armed) return undefined;
     const timer = window.setTimeout(function () {
@@ -228,6 +265,11 @@ function ConfirmBtn(props: { label: string; confirmLabel: string; onConfirm: () 
   }, [armed]);
   return h(Btn, {
     variant: props.variant,
+    title: props.title,
+    disabled: disabled,
+    armed: armed,
+    icon: props.icon,
+    iconName: props.iconName,
     onClick: function () {
       if (!armed) {
         setArmed(true);

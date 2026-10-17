@@ -121,6 +121,15 @@ function groupStash(rows: StashItem[], mode: string): StashGroup[] {
   return groups;
 }
 
+/**
+ * 收纳包里的一行：左侧整行是「打开对应页面」，右侧是「恢复」。
+ *
+ * 「恢复」只影响这一个按钮、且随时可以再收回来，所以是一点即恢复，不做两步确认；
+ * 一次性改动整张列表的「全部恢复」才需要确认（见 StashPanel）。
+ *
+ * @param props 行数据与两个动作回调，见 StashRowProps。
+ * @returns 收纳包行元素。
+ */
 function StashRow(props: StashRowProps): any {
   const row = props.row;
   return h("div", { className: "lo-stash-row" },
@@ -138,10 +147,10 @@ function StashRow(props: StashRowProps): any {
       h("span", { className: "lo-tag" }, row.scopeLabel)
     ),
     h(Btn, {
+      title: t("action.restore"),
       onClick: function () {
         props.onRestore(row);
-      },
-      title: t("action.restore")
+      }
     }, t("action.restore"))
   );
 }
@@ -153,8 +162,20 @@ function StashPanel(props: StashPanelProps): any {
   useSlotsTick(ctx);
   const state = store.get();
   const mode = state.stashSort;
+  // 搜索串只留在这个面板的本地状态里：关掉收纳包即清空，不写 store。
+  const queryPair = useState("");
+  const rawQuery = queryPair[0];
+  const setQuery = queryPair[1];
+  const query = normalizeQuery(rawQuery);
   const rows = sortStash(stashView(ctx, state), mode);
-  const groups = groupStash(rows, mode);
+  const visible: StashItem[] = [];
+  let v: number;
+  for (v = 0; v < rows.length; v++) {
+    const row = rows[v];
+    // 名字、id、所属位置三者任一命中都算：用户记得哪个都能搜到。
+    if (!query || hitQuery(row.label, query) || hitQuery(row.id, query) || hitQuery(row.scopeLabel, query)) visible.push(row);
+  }
+  const groups = groupStash(visible, mode);
 
   useEffect(function () {
     function onKey(event: KeyboardEvent) {
@@ -209,7 +230,7 @@ function StashPanel(props: StashPanelProps): any {
       h("div", { className: "lo-stash", role: "dialog", "aria-label": t("stash.title") },
         h("div", { className: "lo-stash-head" },
           h("span", { className: "lo-stash-title" }, t("stash.title")),
-          h("span", { className: "lo-stash-count" }, t("stash.count").replace("{count}", String(rows.length))),
+          h("span", { className: "lo-stash-count" }, t("stash.count").replace("{count}", query ? visible.length + " / " + rows.length : String(rows.length))),
           h("button", { type: "button", className: "lo-stash-close", onClick: closeStash, title: t("action.close") }, "\u00d7")
         ),
         h("div", { className: "lo-stash-sorts" },
@@ -225,18 +246,30 @@ function StashPanel(props: StashPanelProps): any {
             }, t(SORT_MODE_KEYS[item]));
           })
         ),
+        h("div", { className: "lo-stash-search" },
+          h(SearchBox, {
+            value: rawQuery,
+            placeholder: t("search.placeholder"),
+            clearLabel: t("search.clear"),
+            onChange: setQuery
+          })
+        ),
         h("div", { className: "lo-stash-actions" },
-          h(Btn, {
+          h(ConfirmBtn, {
+            label: t("action.restoreAll"),
+            confirmLabel: t("action.confirmRestore"),
             disabled: rows.length === 0,
-            onClick: function () {
+            onConfirm: function () {
               store.update(function (next: PluginState) {
                 restoreAllHidden(next);
               });
             }
-          }, t("action.restoreAll"))
+          })
         ),
         h("div", { className: "lo-stash-body" },
-          rows.length === 0 ? h("div", { className: "lo-empty" }, t("empty.stash")) : body
+          visible.length === 0
+            ? h("div", { className: "lo-empty" }, query ? t("empty.search") : t("empty.stash"))
+            : body
         )
       )
     ),

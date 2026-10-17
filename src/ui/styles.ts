@@ -31,42 +31,85 @@ const CSS_TEXT: string[] = [
   ".lo-launcher-count{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:rgba(127,127,127,.35);font-size:11px;line-height:1}",
 
   ".lo-mask{position:fixed;inset:0;z-index:" + Z_MASK + ";background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,.32));backdrop-filter:blur(2px);animation:lo-fade .14s ease}",
-  ".lo-stash{position:fixed;z-index:" + Z_STASH + ";top:50%;left:50%;transform:translate(-50%,-50%);width:min(440px,calc(100vw - 32px));max-height:min(74vh,620px);display:flex;flex-direction:column;border-radius:16px;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1);box-shadow:0 24px 64px rgba(0,0,0,.34);overflow:hidden;animation:lo-rise .16s ease}",
+  // 固定宽高：标题、排序、搜索、全部恢复都钉在顶部，只有下面的列表滚动。
+  ".lo-stash{position:fixed;z-index:" + Z_STASH + ";top:50%;left:50%;transform:translate(-50%,-50%);width:min(520px,92vw);height:min(720px,84vh);display:flex;flex-direction:column;border-radius:16px;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1);box-shadow:0 24px 64px rgba(0,0,0,.34);overflow:hidden;animation:lo-rise .16s ease}",
   ".lo-stash-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--dsw-alias-border-l1)}",
   ".lo-stash-title{font-size:14px;font-weight:600;color:var(--dsw-alias-label-primary)}",
   ".lo-stash-count{font-size:12px;color:var(--dsw-alias-label-secondary)}",
   ".lo-stash-close{margin-left:auto;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:16px;line-height:1;cursor:pointer}",
   ".lo-stash-close:hover{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}",
   ".lo-stash-sorts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:12px 16px 8px}",
+  ".lo-stash-search{padding:0 16px 10px}",
   ".lo-stash-actions{display:flex;padding:0 16px 10px}",
-  ".lo-stash-actions>.lo-btn{flex:1 1 auto}",
+  ".lo-stash-actions>.lo-btn{flex:1 1 auto;white-space:nowrap}",
   ".lo-chip{padding:5px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;cursor:pointer;text-align:center;transition:background .12s ease,border-color .12s ease,color .12s ease}",
   ".lo-chip[aria-pressed='true']{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-inverted,#fff)}",
   ".lo-chip:hover{border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary)}",
   ".lo-chip[aria-pressed='true']:hover{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-inverted,#fff);filter:brightness(1.08)}",
   ".lo-stash-body{flex:1 1 auto;min-height:0;overflow:auto;padding:4px 12px 14px;display:flex;flex-direction:column;gap:4px}",
+  // 收纳包列表是固定高度的滚动区，行与分组标题都必须按内容定高。
+  ".lo-stash-body>*{flex:0 0 auto}",
   ".lo-stash-group{padding:12px 8px 6px;font-size:11px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}",
   ".lo-stash-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px}",
   ".lo-stash-row:hover{background:var(--dsw-alias-bg-layer-1)}",
+  // 恢复按钮不参与收缩，也不换行：标签再长也只占它自己的量，名字那一侧自己打点。
+  ".lo-stash-row>.lo-btn{flex:0 0 auto;white-space:nowrap}",
   ".lo-stash-main{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:9px;padding:5px 2px;border:0;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;line-height:1.45;text-align:left;cursor:pointer}",
   ".lo-stash-main:disabled{cursor:default;color:var(--dsw-alias-label-secondary)}",
   ".lo-stash-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
   ".lo-tag{flex:0 0 auto;padding:2px 7px;border-radius:999px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font-size:11px;white-space:nowrap}",
   ".lo-empty{padding:28px 20px;text-align:center;font-size:13px;line-height:1.6;color:var(--dsw-alias-label-secondary)}",
 
+  // 搜索行：独立一条，图标与清除按钮都不吃输入框的宽度。
+  ".lo-search{display:flex;align-items:center;gap:8px;flex:0 0 auto;padding:7px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-base)}",
+  ".lo-search:focus-within{border-color:var(--dsw-alias-brand-primary)}",
+  ".lo-search-icon{flex:0 0 auto;color:var(--dsw-alias-label-secondary);font-size:14px;line-height:1}",
+  ".lo-search-input{flex:1 1 auto;min-width:0;border:0;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:13px;outline:none}",
+  ".lo-search-input::placeholder{color:var(--dsw-alias-label-secondary)}",
+  ".lo-search-clear{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary);font-size:14px;line-height:1;white-space:nowrap;cursor:pointer}",
+  ".lo-search-clear:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}",
+
   // 负外边距收紧标题与导语的间距
-  ".lo-page{display:flex;flex-direction:column;gap:14px;padding:2px 2px 12px}",
+  ".lo-page{display:flex;flex-direction:column;gap:14px;padding:2px 2px 12px;box-sizing:border-box;height:100%;min-height:0}",
+  // 页内除分页容器外都是固定高度的横条与卡片，不允许被 100% 高度压缩。
+  ".lo-page>*{flex:0 0 auto}",
+  ".lo-page>.lo-tabpane{flex:1 1 auto;min-height:0}",
   ".lo-title{margin:0;line-height:1.3}",
-  // 标题行：大标题靠左，导出 / 导入 / GitHub 三个按钮靠右。
+  // 标题行：大标题靠左，导出 / 导入 / GitHub / 问题反馈四个按钮靠右。
   ".lo-titlerow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}",
   ".lo-titlerow .lo-title{flex:1 1 auto;min-width:0}",
   ".lo-titleacts{flex:0 0 auto;display:flex;gap:8px}",
+  // 标题行按钮比列表里的大一号：这是本页最主要的动作区，按下时不该比正文还轻。
+  ".lo-titleacts .lo-btn{min-height:32px;padding:0 14px;gap:8px;font-size:12.5px;border-radius:9px}",
+  // 顶部导航：两项分页切换，点哪个只渲染那一组卡片。
+  ".lo-tabs{flex:0 0 auto;display:flex;gap:4px;padding:3px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-2)}",
+  ".lo-tab{flex:1 1 auto;min-height:28px;padding:0 12px;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12.5px;white-space:nowrap;cursor:pointer;transition:background .12s ease,color .12s ease}",
+  ".lo-tab:hover{color:var(--dsw-alias-label-primary)}",
+  ".lo-tab[data-active='1']{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);box-shadow:0 1px 3px rgba(0,0,0,.16)}",
+  // 分页容器与滚动区：搜索行钉在顶部，只有卡片区滚动，滚动条因此不会跑出分页范围。
+  ".lo-tabpane{display:flex;flex-direction:column;gap:12px;flex:1 1 auto;min-height:0}",
+  ".lo-scroll{display:flex;flex-direction:column;gap:14px;flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding-right:4px;scrollbar-gutter:stable}",
+  // 滚动区里的卡片必须按内容定高：flex 列默认允许收缩，一旦滚动区有确定高度，
+  // 卡片就会被压扁成「卡片头 + 被裁掉的身体」，相邻卡片还会互相压住。
+  ".lo-scroll>*{flex:0 0 auto}",
+  // 图标吃按钮的字色（currentColor）；尺寸由内联 <svg> 上的宽高固定，容器只做对齐。
+  ".lo-ico{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}",
+  ".lo-ico>svg{display:block}",
+  // 光学校正：四份素材在各自 viewBox 里的留白差得远——导出 / 导入的图形几乎顶满画布（99%），
+  // GitHub 86%、问题反馈 82%，同尺寸内联后肉眼高矮不一。按每份素材实测的占空比缩放，让四者的视觉高度
+  // 都落在 ~14px；缩放不改变布局盒子，所以按钮宽高与图标基线不受影响。
+  ".lo-ico[data-ico='export']>svg{transform:scale(.88)}",
+  ".lo-ico[data-ico='import']>svg{transform:scale(.88)}",
+  ".lo-ico[data-ico='github']>svg{transform:scale(1.05)}",
+  ".lo-ico[data-ico='feedback']>svg{transform:scale(1)}",
   ".lo-notice{margin:-6px 0;font-size:12px;line-height:1.5;color:var(--dsw-alias-state-success-primary,#2f9e44)}",
   ".lo-notice[data-tone='error']{color:var(--dsw-alias-state-error-primary,#ec1313)}",
   ".lo-lead{margin:-8px 0 -8px;font-size:12.5px;line-height:1.6;color:var(--dsw-alias-label-secondary)}",
   ".lo-card{border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1);overflow:hidden}",
   ".lo-card-head{padding:11px 14px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary)}",
   ".lo-card-body{display:flex;flex-direction:column}",
+  // 卡片内部同理：字段行与行列表按内容定高，压缩只会让文字被裁掉。
+  ".lo-card-body>*{flex:0 0 auto}",
   ".lo-field{display:flex;align-items:center;gap:14px;padding:11px 14px;border-top:1px solid var(--dsw-alias-border-l1)}",
   ".lo-field:first-child{border-top:0}",
   ".lo-field[data-collapsible='1']{cursor:pointer;user-select:none}",
@@ -95,7 +138,7 @@ const CSS_TEXT: string[] = [
   ".lo-switch::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--dsw-alias-switch-thumb);box-shadow:0 1px 3px rgba(0,0,0,.28);transition:transform .16s ease,background .16s ease}",
   ".lo-switch[aria-checked='true']::after{transform:translateX(16px);background:var(--dsw-alias-label-primary-foreground)}",
 
-  ".lo-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:28px;padding:0 11px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;cursor:pointer;transition:background .12s ease,border-color .12s ease,color .12s ease}",
+  ".lo-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:28px;padding:0 11px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12px;white-space:nowrap;cursor:pointer;transition:background .12s ease,border-color .12s ease,color .12s ease}",
   ".lo-btn:hover:not(:disabled){border-color:var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2)}",
   ".lo-btn:disabled{opacity:.45;cursor:default}",
   ".lo-btn[data-variant='primary']{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-inverted,#fff)}",
@@ -103,8 +146,12 @@ const CSS_TEXT: string[] = [
   ".lo-btn[data-variant='primary']:hover:not(:disabled){background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-inverted,#fff);filter:brightness(1.08)}",
   ".lo-btn[data-variant='ghost']{border-color:transparent}",
   ".lo-btn[data-size='icon']{width:28px;padding:0;font-size:13px}",
+  // 两步确认的已上膛态：换成警示色，明确「这一下会真的执行」。
+  ".lo-btn[data-armed='1']{border-color:var(--dsw-alias-state-warn-primary);color:var(--dsw-alias-state-warn-primary)}",
+  ".lo-btn[data-armed='1']:hover:not(:disabled){border-color:var(--dsw-alias-state-warn-primary);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-state-warn-primary)}",
 
   ".lo-rows{display:flex;flex-direction:column;padding:4px 6px 8px}",
+  ".lo-rows>*{flex:0 0 auto}",
   ".lo-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:9px;-webkit-user-select:none;user-select:none;transition:background .12s ease}",
   ".lo-row *{-webkit-user-select:none;user-select:none}",
   ".lo-row:hover{background:var(--dsw-alias-bg-layer-2)}",

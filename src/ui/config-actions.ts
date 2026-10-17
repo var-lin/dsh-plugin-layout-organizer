@@ -2,6 +2,8 @@
 // 导出走浏览器下载，导入走临时 `<input type=file>` 并整体覆盖 store，两步都由设置页的按钮触发。
 
 const GITHUB_URL = "https://github.com/var-lin/dsh-plugin-layout-organizer";
+// 问题反馈直接落到仓库的 issue 列表页，省掉用户从仓库首页再点一次。
+const GITHUB_ISSUES_URL = GITHUB_URL + "/issues";
 
 /**
  * 把当前持久化状态导出成 JSON 文件。

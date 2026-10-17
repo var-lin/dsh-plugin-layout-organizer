@@ -36,7 +36,10 @@ const BUILD_ORDER = [
   "drag/drag-list.ts",
   "ui/styles.ts",
   "ui/kit.ts",
+  "ui/search.ts",
   "ui/config-actions.ts",
+  "ui/scope-card.ts",
+  "ui/shortcut-card.ts",
   "ui/settings-page.ts",
   "ui/stash.ts",
   "main.ts"

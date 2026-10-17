@@ -1,24 +1,4 @@
 
-// 账本报出的一行：store 持久化的 id、给人看的标签，以及官方渲染器会采用的注册顺序。
-// `hasLabel` 为真表示这个标签是权威文案，不是 id 兜底或投影猜出来的名字。
-interface ScopeEntry {
-  id: string;
-  label: string;
-  order: number;
-  hasLabel?: boolean;
-}
-
-interface ScopeCardProps {
-  ctx: CtxLike;
-  store: StoreHandle;
-  scope: string;
-}
-
-interface ShortcutCardProps {
-  ctx: CtxLike;
-  store: StoreHandle;
-}
-
 interface SettingsPageProps {
   ctx: CtxLike;
   store: StoreHandle;
@@ -26,349 +6,25 @@ interface SettingsPageProps {
   onOpenStash?: () => void;
 }
 
-// 快捷键编辑器下方的报告文字；`tone` 成为样式表上色用的 `data-tone`（"ok"/"warn"/"error"）。
-interface ShortcutReport {
-  tone: string;
-  text: string;
-}
-
-// 目录里的一行；`keys` 已是平台相关格式化的键帽，`issue`/`conflicts` 来自 `describeBinding`。
-interface ShortcutCatalogRow {
-  id: string;
-  label?: string;
-  keys?: string[];
-  issue?: unknown;
-  conflicts?: string[];
-  binding?: unknown;
-}
-
-// 本卡片用到的 `shortcuts` 服务；`edit` 以分类后的结果 resolve，成功状态是 `"saved"`。
-interface ShortcutEditorService {
-  catalog?: {
-    subscribe(fn: () => void): (() => void) | void;
-    getSnapshot(): ShortcutCatalogRow[];
-  };
-  config: { getSnapshot(): { revision: string } };
-  describeBinding(binding: { code: string; modifiers: string[] }): { issue?: unknown; conflicts?: string[] };
-  edit(edit: { type: string; id?: string; binding?: unknown }, revision: string): Promise<{ status?: string } | null | undefined>;
-}
+/**
+ * 设置页顶部导航的两项：位置管理（收纳包入口 + 五张排序卡片）与通用设置（开关 + 快捷键）。
+ *
+ * 分组是产品决定：按钮收纳包属于「整理按钮可见性」，快捷键属于「全局行为」，
+ * 因此前者跟随位置卡片、后者跟随开关。
+ */
+// 导航顺序：位置管理在前、通用设置在后（位置管理是本插件的主用途，默认也停在这一页）。
+const TAB_KEYS: string[] = ["layout", "general"];
 
 /**
- * 成功绝不能被报成 保存失败：`"saved"` 与 `"ok"` 都算成功。
+ * 本插件在设置页里的整页视图。
  *
- * @param status 编辑服务返回的状态值。
- * @returns 状态为 `"saved"` 或 `"ok"` 时为 true。
- */
-function shortcutSaveOk(status: unknown): boolean {
-  return status === "saved" || status === "ok";
-}
-
-function scopeEntries(ctx: CtxLike, state: PluginState, scope: string): ScopeEntry[] {
-  const entries = readEntries(ctx, scope);
-  const byId: Record<string, ScopeEntry> = {};
-  let i: number;
-  for (i = 0; i < entries.length; i++) byId[entries[i].id] = entries[i];
-
-  // 顺序由 `reconcileOrder` 重算，不从 DOM 读回
-  const ids: string[] = [];
-  for (i = 0; i < entries.length; i++) ids.push(entries[i].id);
-  const order = reconcileOrder(state, scope, ids);
-
-  // 只列屏幕上真正存在的行：台账里渲染成空的记录（供应商未登录时的统计读数）不该出现，
-  // 否则用户会对着一行看不见的条目排序、收纳（见 liveRows）。
-  const live = liveRowIds(scope);
-  const listed: string[] = [];
-  for (i = 0; i < order.length; i++) {
-    const id = order[i];
-    if (live && live.indexOf(id) < 0) continue;
-    const entry = byId[id];
-    if (entry) listed.push(id);
-  }
-  // 协调后顺序里没见过的行按账本顺序追加在末尾，而不是悄悄消失。
-  for (i = 0; i < entries.length; i++) {
-    const id = entries[i].id;
-    if (listed.indexOf(id) >= 0) continue;
-    if (live && live.indexOf(id) < 0) continue;
-    listed.push(id);
-  }
-
-  const out: ScopeEntry[] = [];
-  for (i = 0; i < listed.length; i++) {
-    const entry = byId[listed[i]];
-    if (!entry) continue;
-    // 台账没给文案时用投影记下的名字（钩子文案或界面文字），不要露出裸 id。
-    const shown = entry.hasLabel ? entry.label : liveRowLabel(scope, entry.id) || hookLabel(scope, entry.id);
-    out.push({ id: entry.id, label: shown || entry.label, order: entry.order, hasLabel: entry.hasLabel || !!shown });
-  }
-  return out;
-}
-
-function ScopeCard(props: ScopeCardProps): any {
-  const ctx = props.ctx;
-  const store = props.store;
-  const scope = props.scope;
-  const spec = SCOPE_OF_KEY[scope];
-  useSlotsTick(ctx);
-  useStoreTick(store);
-  // revision tick 在投影真正落地后才触发
-  useRevisionTick();
-  const state = store.get();
-  const entries = scopeEntries(ctx, state, scope);
-  const mounted = collectRows(scope) !== null;
-
-  const rows: any[] = [];
-  let i: number;
-  // 混合排序打开时整条列表算一个组
-  const mixed = mixedOrder(state);
-  const groupIndex: Record<string, number> = { official: 0, third: 0 };
-  const groupTotal: Record<string, number> = { official: 0, third: 0 };
-  for (i = 0; i < entries.length; i++) groupTotal[groupOf(state, scope, entries[i].id)]++;
-  for (i = 0; i < entries.length; i++) {
-    const entry = entries[i];
-    const id = entry.id;
-    const kind = kindOf(state, scope, id);
-    const group = kind === "official" ? "official" : "third";
-    const listGroup = mixed ? "all" : group;
-    const hidden = isHidden(state, scope, id);
-    const self = scope === "settings" && id === SELF_ID;
-    const index = mixed ? i : groupIndex[group]++;
-    const total = mixed ? entries.length : groupTotal[group];
-    (function (entry: ScopeEntry, id: string, kind: string, group: string, index: number, hidden: boolean, self: boolean) {
-      rows.push(h(RowItem, {
-        key: scope + ":" + id,
-        entry: entry,
-        kind: kind,
-        group: listGroup,
-        hidden: hidden,
-        self: self,
-        draggable: true,
-        canUp: index > 0,
-        canDown: index < total - 1,
-        onToggleKind: function () {
-          store.update(function (next: PluginState) {
-            next.kinds[scope + ":" + id] = kind === "official" ? "third" : "official";
-          });
-        },
-        onUp: function () {
-          store.update(function (next: PluginState) {
-            moveRow(next, scope, id, -1, listGroup);
-          });
-        },
-        onDown: function () {
-          store.update(function (next: PluginState) {
-            moveRow(next, scope, id, 1, listGroup);
-          });
-        },
-        onToggleHidden: function () {
-          store.update(function (next: PluginState) {
-            setHidden(next, scope, id, !hidden);
-          });
-        },
-        onMenu: function (event: MouseEvent) {
-          attachMenuAt(event, ctx, store, scope, id, listGroup);
-        }
-      }));
-    })(entry, id, kind, group, index, hidden, self);
-  }
-
-  return h(Card, { title: t(spec.labelKey) },
-    mounted ? null : h("div", { className: "lo-note" }, t("scope.missing")),
-    rows.length > 0
-      ? h("div", { className: "lo-rows", "data-lo-list-scope": scope }, rows)
-      : h("div", { className: "lo-empty" }, t("empty.list")),
-    h("div", { className: "lo-note" },
-      h(ConfirmBtn, {
-        label: t("action.reset"),
-        confirmLabel: t("action.confirm"),
-        onConfirm: function () {
-          store.update(function (next: PluginState) {
-            resetScope(next, scope);
-          });
-        }
-      })
-    )
-  );
-}
-
-/**
- * 快捷键编辑器的一行：键帽本身即录制入口；冲突与不受支持的组合由 `describeBinding` 以文字报出。
+ * 结构：标题行（导出 / 导入 / GitHub / 问题反馈）→ 结果提示 → 导语 → 降级警告 → 顶部导航 →
+ * 当前分页的内容。位置管理页还带搜索行，搜索行以下是一个独立滚动容器，
+ * 因此滚动条只出现在卡片区，标题与搜索行始终可见。
  *
- * @param props 上下文与状态句柄，见 ShortcutCardProps。
- * @returns 快捷键卡片元素。
+ * @param props 上下文、状态句柄、降级原因与「打开收纳包」回调，见 SettingsPageProps。
+ * @returns 设置页元素。
  */
-function ShortcutCard(props: ShortcutCardProps): any {
-  const ctx = props.ctx;
-  useStoreTick(props.store);
-  const pair = useState<ShortcutReport | null>(null);
-  const report = pair[0];
-  const setReport = pair[1];
-  const tickPair = useState(0);
-  const setTick = tickPair[1];
-  const recordingPair = useState(false);
-  const recording = recordingPair[0];
-  const setRecording = recordingPair[1];
-
-  function service(): ShortcutEditorService | null {
-    try {
-      return (ctx.get("shortcuts") as ShortcutEditorService | undefined) || null;
-    } catch (err) {
-      return null;
-    }
-  }
-
-  useEffect(function () {
-    const shortcuts = service();
-    if (!shortcuts || !shortcuts.catalog || !shortcuts.catalog.subscribe) return undefined;
-    return shortcuts.catalog.subscribe(function () {
-      setTick(function (value: number) {
-        return value + 1;
-      });
-    });
-  }, [ctx]);
-
-  const shortcuts = service();
-  let keys: string[] = [];
-  let issue: unknown = null;
-  let conflicts: string[] = [];
-  let bound = false;
-  if (shortcuts && shortcuts.catalog) {
-    const catalog = shortcuts.catalog.getSnapshot() || [];
-    let j: number;
-    for (j = 0; j < catalog.length; j++) {
-      if (catalog[j].id !== SHORTCUT_ID) continue;
-      keys = catalog[j].keys || [];
-      issue = catalog[j].issue || null;
-      conflicts = catalog[j].conflicts || [];
-      bound = catalog[j].binding !== null && catalog[j].binding !== undefined;
-    }
-  }
-
-  /**
-   * 冲突报告需把 id 映射回人类可读标签，目录是唯一提供该映射的地方。
-   *
-   * @param ids 冲突的快捷键 id 列表。
-   * @returns 目录里有对应标签时用标签，否则退回 id 本身，逗号分隔。
-   */
-  function names(ids: string[]): string {
-    const catalog = shortcuts && shortcuts.catalog ? shortcuts.catalog.getSnapshot() || [] : [];
-    const out: string[] = [];
-    let k: number;
-    for (k = 0; k < ids.length; k++) {
-      let label: string | null = null;
-      let m: number;
-      for (m = 0; m < catalog.length; m++) if (catalog[m].id === ids[k]) label = catalog[m].label || null;
-      out.push(label || ids[k]);
-    }
-    return out.join(", ");
-  }
-
-  /**
-   * 录制期间由文档级捕获监听器收到按键：收集修饰键后把整组绑定交给服务的 `describeBinding`，由它报出问题或冲突。
-   *
-   * @param event 键帽上捕获到的按键事件；纯修饰键直接返回，描述器报出问题/冲突时只更新报告文字，都不写配置。
-   */
-  function capture(event: KeyboardEvent): void {
-    event.preventDefault();
-    event.stopPropagation();
-    const modifiers: string[] = [];
-    if (event.ctrlKey) modifiers.push("control");
-    if (event.altKey) modifiers.push("alt");
-    if (event.shiftKey) modifiers.push("shift");
-    if (event.metaKey) modifiers.push("meta");
-    if (["Control", "Alt", "Shift", "Meta"].indexOf(event.key) >= 0) return;
-    const code = event.code;
-    const binding = { code: code, modifiers: modifiers };
-    if (!shortcuts || !shortcuts.describeBinding) return;
-    const described = shortcuts.describeBinding(binding);
-    if (described.issue) {
-      setReport({ tone: "error", text: t("shortcut.invalid").replace("{reason}", String(described.issue)) });
-      return;
-    }
-    if (described.conflicts && described.conflicts.length > 0) {
-      setReport({ tone: "error", text: t("shortcut.conflict").replace("{list}", names(described.conflicts)) });
-      return;
-    }
-    const revision = shortcuts.config.getSnapshot().revision;
-    setRecording(false);
-    shortcuts.edit({ type: "set", id: SHORTCUT_ID, binding: binding }, revision).then(function (result) {
-      if (result && shortcutSaveOk(result.status)) {
-        setReport({ tone: "ok", text: t("shortcut.saved") });
-      } else {
-        const status = result && result.status !== undefined ? result.status : "write-failed";
-        setReport({ tone: "error", text: t("shortcut.failed").replace("{status}", String(status)) });
-      }
-    }, function () {
-      setReport({ tone: "error", text: t("shortcut.failed").replace("{status}", "write-failed") });
-    });
-  }
-
-  useEffect(function () {
-    if (!recording) return undefined;
-    document.addEventListener("keydown", capture, true);
-    return function () {
-      document.removeEventListener("keydown", capture, true);
-    };
-  }, [recording, ctx]);
-
-  function reset(): void {
-    if (!shortcuts) return;
-    const revision = shortcuts.config.getSnapshot().revision;
-    shortcuts.edit({ type: "reset", id: SHORTCUT_ID }, revision).then(function (result) {
-      if (result && shortcutSaveOk(result.status)) setReport({ tone: "ok", text: t("shortcut.saved") });
-      else setReport({ tone: "error", text: t("shortcut.failed").replace("{status}", String(result && result.status !== undefined ? result.status : "write-failed")) });
-    }, function () {
-      setReport({ tone: "error", text: t("shortcut.failed").replace("{status}", "write-failed") });
-    });
-  }
-
-  /**
-   * 录制由文档级捕获监听器驱动并阻止传播，录制中的按键到不了这个处理函数。
-   *
-   * 调用时先清掉上一次的报告文字，再在录制/未录制之间切换。
-   */
-  function toggleRecording(): void {
-    setReport(null);
-    setRecording(!recording);
-  }
-
-  function onKeysKeyDown(event: KeyboardEvent): void {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      toggleRecording();
-    }
-  }
-
-  // 状态文字内联在键帽行里，紧挨键帽框右侧。
-  let status: any = null;
-  if (report) status = h("span", { className: "lo-shortcut-msg", "data-tone": report.tone }, report.text);
-  else if (!bound) status = h("span", { className: "lo-shortcut-msg" }, t("shortcut.none"));
-  else if (issue) status = h("span", { className: "lo-shortcut-msg", "data-tone": "error" }, t("shortcut.invalid").replace("{reason}", String(issue)));
-  else if (conflicts.length > 0) status = h("span", { className: "lo-shortcut-msg", "data-tone": "error" }, t("shortcut.conflict").replace("{list}", names(conflicts)));
-
-  return h(Card, { title: t("section.shortcut") },
-    h(Field, {
-      label: t("shortcut.open"),
-      hint: t("shortcut.hint"),
-      // stack：标签与提示各占一行，控件行在下面，键帽框与 恢复默认 永远不会被挤成两行。
-      stack: true,
-      children: h("div", { className: "lo-keyrow" },
-        h("span", {
-          className: "lo-keys",
-          role: "button",
-          tabIndex: 0,
-          "data-recording": recording ? "1" : undefined,
-          "data-empty": keys.length > 0 ? undefined : "1",
-          title: recording ? t("shortcut.recording") : t("shortcut.record"),
-          onClick: toggleRecording,
-          onKeyDown: onKeysKeyDown
-        }, recording ? t("shortcut.recording") : keys.length > 0 ? keys.join("") : t("shortcut.none")),
-        status,
-        h("span", { className: "lo-keyrow-end" }, h(Btn, { disabled: !bound, onClick: reset }, t("shortcut.reset")))
-      )
-    })
-  );
-}
-
 function SettingsPage(props: SettingsPageProps): any {
   const ctx = props.ctx;
   const store = props.store;
@@ -379,6 +35,16 @@ function SettingsPage(props: SettingsPageProps): any {
   const noticePair = useState<{ text: string; tone: string } | null>(null);
   const notice = noticePair[0];
   const setNotice = noticePair[1];
+
+  // 当前分页；只渲染选中的那一组卡片。
+  const tabPair = useState<string>("layout");
+  const tab = tabPair[0];
+  const setTab = tabPair[1];
+
+  // 搜索串只作用于当前分页里的按钮列表，切页保留输入。
+  const queryPair = useState("");
+  const query = queryPair[0];
+  const setQuery = queryPair[1];
 
   // 「有下属行」的折叠状态存进 store（options.collapsed），重开页面保持上次的展开 / 折叠。缺省展开。
   const collapsedMap: Record<string, boolean> = state.options.collapsed || {};
@@ -395,49 +61,15 @@ function SettingsPage(props: SettingsPageProps): any {
   const scopeCards: any[] = [];
   let i: number;
   for (i = 0; i < SCOPES.length; i++) {
-    scopeCards.push(h(ScopeCard, { key: SCOPES[i].key, ctx: ctx, store: store, scope: SCOPES[i].key }));
+    scopeCards.push(h(ScopeCard, { key: SCOPES[i].key, ctx: ctx, store: store, scope: SCOPES[i].key, query: query }));
   }
+  // 搜索时五张卡片可能全被过滤掉，此时给一句说明而不是空白。
+  let anyScopeHit = false;
+  for (i = 0; i < scopeCards.length; i++) if (scopeCards[i]) anyScopeHit = true;
+  const searching = normalizeQuery(query).length > 0;
 
-  return h("div", { className: "lo-page" },
-    h("div", { className: "lo-titlerow" },
-      h("h2", { className: "lo-title" }, t("title")),
-      h("div", { className: "lo-titleacts" },
-        h(Btn, {
-          title: t("action.export.hint"),
-          onClick: function () {
-            exportConfig(store);
-            setNotice({ text: t("note.exported"), tone: "ok" });
-          }
-        }, t("action.export")),
-        h(Btn, {
-          title: t("action.import.hint"),
-          onClick: function () {
-            importConfig(store, function (ok: boolean) {
-              setNotice({ text: ok ? t("note.importOk") : t("note.importFail"), tone: ok ? "ok" : "error" });
-            });
-          }
-        }, t("action.import")),
-        h(Btn, {
-          title: t("action.github.hint"),
-          onClick: function () {
-            window.open(GITHUB_URL, "_blank", "noopener");
-          }
-        }, t("action.github"))
-      )
-    ),
-    notice ? h("div", { className: "lo-notice", "data-tone": notice.tone }, notice.text) : null,
-    h("p", { className: "lo-lead" }, t("subtitle")),
-
-    (props.degraded && props.degraded.length > 0)
-      ? h("div", { className: "lo-warn" },
-          h("div", null, t("note.degrade")),
-          props.degraded.map(function (message: string, index: number) {
-            return h("div", { key: index }, "\u00b7 " + message);
-          })
-        )
-      : null,
-
-    h(Card, { title: t("section.options") },
+  const generalBody: any[] = [
+    h(Card, { key: "options", title: t("section.options") },
       // 整行切换折叠/展开；箭头只做状态指示。
       h(Field, {
         label: t("opt.allowDragOfficial"),
@@ -545,7 +177,7 @@ function SettingsPage(props: SettingsPageProps): any {
         hint: t("action.resetAll.hint"),
         children: h(ConfirmBtn, {
           label: t("action.resetAll"),
-          confirmLabel: t("action.confirm"),
+          confirmLabel: t("action.confirmResetAll"),
           onConfirm: function () {
             store.update(function (next: PluginState) {
               const fresh = defaultState();
@@ -558,17 +190,110 @@ function SettingsPage(props: SettingsPageProps): any {
         })
       })
     ),
+    h(ShortcutCard, { key: "shortcut", ctx: ctx, store: store })
+  ];
 
-    h(Card, { title: t("section.stash") },
+  const layoutBody: any[] = [
+    h(Card, { key: "stash", title: t("section.stash") },
       h(Field, {
         label: t("stash.title"),
         hint: t("stash.count").replace("{count}", String(stashCount(state))),
         children: h(Btn, { variant: "primary", onClick: props.onOpenStash }, t("action.openStash"))
       })
+    )
+  ];
+  for (i = 0; i < scopeCards.length; i++) {
+    if (scopeCards[i]) layoutBody.push(scopeCards[i]);
+  }
+  if (searching && !anyScopeHit) layoutBody.push(h("div", { key: "no-hit", className: "lo-empty" }, t("empty.search")));
+
+  const navButtons: any[] = [];
+  for (i = 0; i < TAB_KEYS.length; i++) {
+    (function (key: string) {
+      const active = tab === key;
+      navButtons.push(h("button", {
+        key: key,
+        type: "button",
+        className: "lo-tab",
+        role: "tab",
+        "aria-selected": active ? "true" : "false",
+        "data-active": active ? "1" : undefined,
+        onClick: function () {
+          setTab(key);
+        }
+      }, t("tab." + key)));
+    })(TAB_KEYS[i]);
+  }
+
+  return h("div", { className: "lo-page" },
+    h("div", { className: "lo-titlerow" },
+      h("h2", { className: "lo-title" }, t("title")),
+      h("div", { className: "lo-titleacts" },
+        h(Btn, {
+          icon: ACTION_ICON_EXPORT,
+          iconName: "export",
+          title: t("action.export.hint"),
+          onClick: function () {
+            exportConfig(store);
+            setNotice({ text: t("note.exported"), tone: "ok" });
+          }
+        }, t("action.export")),
+        h(ConfirmBtn, {
+          label: t("action.import"),
+          confirmLabel: t("action.confirmImport"),
+          icon: ACTION_ICON_IMPORT,
+          iconName: "import",
+          title: t("action.import.hint"),
+          onConfirm: function () {
+            importConfig(store, function (ok: boolean) {
+              setNotice({ text: ok ? t("note.importOk") : t("note.importFail"), tone: ok ? "ok" : "error" });
+            });
+          }
+        }),
+        h(Btn, {
+          icon: ACTION_ICON_GITHUB,
+          iconName: "github",
+          title: t("action.github.hint"),
+          onClick: function () {
+            window.open(GITHUB_URL, "_blank", "noopener");
+          }
+        }, t("action.github")),
+        h(Btn, {
+          icon: ACTION_ICON_FEEDBACK,
+          iconName: "feedback",
+          title: t("action.feedback.hint"),
+          onClick: function () {
+            window.open(GITHUB_ISSUES_URL, "_blank", "noopener");
+          }
+        }, t("action.feedback"))
+      )
     ),
+    notice ? h("div", { className: "lo-notice", "data-tone": notice.tone }, notice.text) : null,
+    h("p", { className: "lo-lead" }, t("subtitle")),
 
-    h(ShortcutCard, { ctx: ctx, store: store }),
+    (props.degraded && props.degraded.length > 0)
+      ? h("div", { className: "lo-warn" },
+          h("div", null, t("note.degrade")),
+          props.degraded.map(function (message: string, index: number) {
+            return h("div", { key: index }, "\u00b7 " + message);
+          })
+        )
+      : null,
 
-    scopeCards
+    h("div", { className: "lo-tabs", role: "tablist" }, navButtons),
+
+    tab === "layout"
+      ? h("div", { className: "lo-tabpane", role: "tabpanel" },
+          h(SearchBox, {
+            value: query,
+            placeholder: t("search.placeholder"),
+            clearLabel: t("search.clear"),
+            onChange: setQuery
+          }),
+          h("div", { className: "lo-scroll" }, layoutBody)
+        )
+      : h("div", { className: "lo-tabpane", role: "tabpanel" },
+          h("div", { className: "lo-scroll" }, generalBody)
+        )
   );
 }

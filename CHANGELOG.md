@@ -3,6 +3,34 @@
 本项目的所有重要变更都记录在这里。
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [1.2.0] - 2026-10-17
+
+### 新增
+
+- **支持范围下探到 `0.1.7-rc.2`**：`engines.dsh` 从 `>=0.2.0-rc.2` 放宽为 `>=0.1.7-rc.2`，四条宿主 peer 同步放宽为 `>=0.1.7-rc.2 <0.3.0-0`。从 `0.1.7-rc.2` 起的每个 `0.1.x`、`0.2.x` 构建——含 `0.2.1-rc.1` / `0.2.1-rc.2` 与 `0.2.1` 正式版——现在装的是同一份包，不需要为版本切换装不同版本。
+- **设置页顶部分页导航**：从原来一整列长页面改成「位置管理」与「通用设置」两页——位置管理放收纳包入口与五张位置卡片，通用设置放各项开关与快捷键编辑器。点击只渲染当前那一页，切换时搜索词保留；默认落在位置管理。
+- **搜索**：位置管理页与按钮收纳包顶部各有一个搜索框，按按钮名称或 id 实时过滤。整张卡片都不匹配时卡片一起让位，清空（输入框右侧的 ×）即恢复全部，空结果显示提示而不是留白。
+- **问题反馈按钮**：标题行新增「问题反馈」，指向仓库的 Issues 页面，与导出 / 导入 / GitHub 并排。
+- **标题行四个动作按钮的图标**：导出、导入、GitHub、问题反馈都从 `assets/icons/` 取图（新增 `export.svg` / `import.svg` / `github.svg` / `feedback.svg` 四份素材，共 11 个），尺寸 16，并按素材画布留白用 `data-ico` 做光学校正，让一排按钮的图标看起来等高。
+
+### 变更
+
+- **按钮收纳包改为固定尺寸**：宽 `min(520px, 92vw)`、高 `min(720px, 84vh)`，标题、搜索、排序与「全部恢复」固定，只有列表区滚动——列表再长也不会把面板撑出屏幕。
+- **设置页拆成多个文件**：`ui/settings-page.ts` 只保留外壳与分页装配，单张位置卡片移到 `ui/scope-card.ts`、快捷键编辑器移到 `ui/shortcut-card.ts`、搜索框移到 `ui/search.ts`，并全部登记进 `build.mjs` 的 `BUILD_ORDER`。
+- **批量操作加二次确认，单行操作不加**：「全部恢复」「恢复本组」「重置所有配置」「导入」改为点两次才执行（3 秒内没有再点就自动还原）；单行恢复、上移 / 下移、切换官方 / 第三方、收纳、导出、GitHub 跳转仍然一点即生效。
+- **收纳包行内的「恢复」不再换行**：按钮 `white-space:nowrap` 且不参与收缩，名字过长时只让名字打点，不再把「恢复」压成竖排。
+
+### 修复
+
+- **滚动区不再压扁内容**：分页容器与收纳包列表是定高的 flex 列，子元素默认允许收缩，于是卡片会被挤成「只剩卡片头」、字段行被裁掉、相邻内容互相叠住。现在 `.lo-page`、`.lo-scroll`、`.lo-card-body`、`.lo-rows`、`.lo-stash-body` 五处滚动区显式 `flex:0 0 auto`（按内容定高），只让 `.lo-tabpane` 用 `flex:1 1 auto` 吃掉剩余高度；`test/accept.mjs` 增第 16 条探针钉住这五条规则。
+- **一次点击误触发批量恢复**：`ConfirmBtn` 在按钮变为禁用时自动卸膛，避免「条件恢复后又一点即执行」。
+
+### 兼容性
+
+- **代码未改一行，这是本次适配的结论而不是省略。** 在 `0.1.7-rc.2`、`0.2.0-rc.1`、`0.2.0-rc.2`、`0.2.1-rc.1`、`0.2.1-rc.2` 五个版本上（直接读 npm 上各包 `lib/client.js`）逐个核对，确认本插件依赖的契约在整条 rc 线上同形：`ctx.slots` 的 `register` / `inject` / `entries` / `entriesOfSlot` / `subscribe` / `getVersion` 成员与语义未变；`locale` 服务名始终是 `"locale"`（该包五版逐字节相同）；`shortcuts.register` 的签名与重复 id 报错串 `Duplicate shortcut command: ` 未变；`shell.overlay`、`settings.section`、`plugins.detail.section` 三个声明未变；五个 scope 的出口与 DOM 收集路径未变（`[data-conversation-tabs]` 自 `0.1.7-rc.1` 起、`[class*='panelList']` 自 `0.1.5-alpha.2` 起、`data-shortcut-modal` 自 `0.1.7-rc.2` 起、`data-composer-dock` 自 `0.2.1` 起——后两者缺席的版本上，本插件走的是不依赖它们的选择器）。
+- **官方药丸只在 `0.2.1` 那一档换过一次形态**，1.1.0 已经把两代（复数 `data-composer-stats` 与单数 `data-composer-stat="activity"` / `"usage"`）并列进 `ROW_HOOKS`，本次无需再动；`0.1.7-rc.2` 到 `0.2.0-rc.2` 用的是旧形态，落在已有的 `stats` 钩子上。`0.2.1-alpha.1`…`alpha.5` 也已抽查：单数钩子与 `activity` / `usage` 两个 id 从 `alpha.1` 起就与 `rc.2` 一致，没有第三套形态。
+- **下限为什么是 `0.1.7-rc.2`**：这是三件事同时成立的最早版本——`shortcuts` 包首次发布（更早的宿主装不上声明了该 peer 的包）、`settings.section` 的导航可被 `data-shortcut-modal` 正证据认领、`conversation.view` 的标签条带 `data-conversation-tabs`。再往前（`0.1.5` 及更早）面板列表与标签条缺少稳定锚点，需要另写一套按位置的收集逻辑，不在本次范围内。
+
 ## [1.1.0] - 2026-10-17
 
 ### 新增
@@ -49,6 +77,7 @@
 - 官方 / 第三方分类依赖内置 id 白名单，因为槽位条目没有可靠的来源字段；任何行都可以在设置页手动改判。
 - 「收纳」不是卸载；被收纳的按钮只是隐藏，其插件仍在运行。
 
+[1.2.0]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.0
 [1.1.0]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.1.0
 [1.0.1]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.0.1
 [1.0.0]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.0.0

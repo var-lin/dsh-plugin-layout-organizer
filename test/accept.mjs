@@ -18,6 +18,8 @@ const files = readdirSync(S, { recursive: true })
 const code = strip(files.map((f) => readFileSync(join(S, f), "utf8")).join("\n"));
 const css = rd("ui/styles.ts");
 const settings = strip(rd("ui/settings-page.ts"));
+// 快捷键编辑器已从设置页拆到独立文件，卡片级断言看拆出来的那一份。
+const shortcutCard = strip(rd("ui/shortcut-card.ts"));
 const stash = strip(rd("ui/stash.ts"));
 const uiKit = strip(rd("ui/kit.ts"));
 const locale = rd("shared/locale.ts");
@@ -39,9 +41,9 @@ t("00 sources discovered", files.length >= 15, `${files.length} .ts files`);
 t("01 launcher draggable / edge snap / top clamp", /onPointerMove/.test(code) && /launcherSide/.test(code) && /clampLauncherY/.test(code) && /topInset/.test(code));
 t("01b no corner model left", !/launcherCorner|CORNERS/.test(code));
 t("02 stash sorting absent from the settings page", !/stashSort|SORT_MODES/.test(settings));
-t("03 engines.dsh declared for the market", pkg.engines?.dsh === ">=0.2.0-rc.2", String(pkg.engines?.dsh));
+t("03 engines.dsh declared for the market", pkg.engines?.dsh === ">=0.1.7-rc.2", String(pkg.engines?.dsh));
 t("03b no self-made dsh.engines field", pkg.dsh?.engines === undefined);
-t("03c host peer window covers 0.2.x", Object.values(pkg.peerDependencies).every((r) => r === ">=0.2.0-rc.2 <0.3.0-0"));
+t("03c host peer window covers every rc", Object.values(pkg.peerDependencies).every((r) => r === ">=0.1.7-rc.2 <0.3.0-0"));
 t("03d test script runs the whole suite", /test\/smoke\.mjs/.test(pkg.scripts?.test ?? "") && /test\/navigate\.mjs/.test(pkg.scripts?.test ?? "") && /test\/accept\.mjs/.test(pkg.scripts?.test ?? ""), pkg.scripts?.test);
 t("04 zh name is 插件布局整理", locale.includes('"nav": "插件布局整理"'));
 t("04b icon replaced", existsSync(join(root, "assets", "icons", "layout.svg")) && /applySelfIcon/.test(code));
@@ -55,13 +57,21 @@ const idx = ['key: "sidebar"', 'key: "footer"', 'key: "tabs"', 'key: "composer"'
 t("09 scope order sidebar>footer>tabs>composer>settings", idx.every((v, n) => v > 0 && (n === 0 || v > idx[n - 1])), JSON.stringify(idx));
 t("10 stash hint text removed", !/stash\.hint/.test(code));
 t("10b this plugin can be stashed too", !/props\.self \? null/.test(uiKit));
-t("11 shortcut editor with conflict text", /describeBinding/.test(settings) && /shortcut\.conflict/.test(locale) && /shortcuts\.edit/.test(settings));
+t("11 shortcut editor with conflict text", /describeBinding/.test(shortcutCard) && /shortcut\.conflict/.test(locale) && /shortcuts\.edit/.test(shortcutCard));
 // 有下属行的开关带一个可点击整行切换的折叠箭头（默认折叠，展开时旋转 180°）。
 t("12 collapsible rows with rotating caret", /onToggleCollapse/.test(code) && /lo-caret/.test(code) && /data-collapsed/.test(code));
 /* 各行不再各自带 `el.oncontextmenu`；`src/core/dom-menu.ts` 在 `window` 上委托了一个
    捕获阶段的 `contextmenu` 监听，再从目标元素反查所属的行。 */
 t("13 context menu up/down/stash", /contextmenu/.test(code) && /openMenu/.test(code));
 t("14 wording is 按钮收纳包", locale.includes("按钮收纳包"));
+/* 分页里的滚动区是定高 flex 列：卡片与收纳行若允许收缩，就会被压扁成「只剩卡片头」，
+   内容互相压住。三处滚动区都必须显式关掉收缩。 */
+{
+  const flat = css.replace(/\s+/g, "");
+  const pinned = [".lo-scroll>*{flex:00auto}", ".lo-page>*{flex:00auto}", ".lo-card-body>*{flex:00auto}", ".lo-rows>*{flex:00auto}", ".lo-stash-body>*{flex:00auto}"];
+  const missing = pinned.filter((rule) => !flat.includes(rule));
+  t("16 scroll panes never squeeze their children", missing.length === 0, missing.join(" "));
+}
 
 /* 合成 id 与官方 id 的重叠必须逐条报备：合成行没有台账条目，但分类上可以属于官方
    （`composer:context-meter` 就是这种情况）。没报备的重叠说明有人把合成行当台账行写了。 */
