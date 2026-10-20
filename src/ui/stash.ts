@@ -79,11 +79,10 @@ function stashView(ctx: CtxLike, state: PluginState): StashItem[] {
     // 名字优先取插件指定的名字，其次台账文案，再取投影记下的名字（钩子文案或界面文字），最后才退回 id。
     const label = rowLabelOf(item.scope, item.id) || (entry && entry.hasLabel ? entry.label : liveRowLabel(item.scope, item.id) || hookLabel(item.scope, item.id) || (entry ? entry.label : "") || item.id);
     // 「找不到这一行」= 这一行不在屏幕上；此时只是不能导航过去，恢复按钮照常可用（见 StashRow）。
-    // scope 整个不在屏幕上时回退到「台账里有没有」，但声明了认领钩子的记录例外：它们可能注册在
-    // 这个槽位、实际渲染在别处（Trae / WorkBuddy 的额度读数），台账里永远有记录，不能因此让人
-    // 从收纳包里恢复一条永远渲染不出来的影子行（见 listedInScope）。
+    // 五处槽位同一把尺子（见 listedInScope）：只有这一轮投影真正标记到的行才算存在，scope 整个
+    // 不在屏幕上时也不退守台账——否则会留下一条永远渲染不出来的影子行让人去恢复。
     const live = liveRowIds(item.scope);
-    const missing = !listedInScope(live, item.scope, item.id) || (!live && !entry);
+    const missing = !listedInScope(live, item.id);
     const navigable = rowNavigable(item.scope, item.id);
     out.push({
       scope: item.scope,
@@ -282,8 +281,8 @@ function StashPanel(props: StashPanelProps): any {
       // 不做折叠——没有「类」可折。
       if (group.title) {
         const collapsedKey = "stash:" + mode + ":" + group.key;
-        // 搜索时强制展开：命中的行藏在收起的分组里，搜索就等于没搜到（计数也会对不上）。
-        const expanded = query ? true : collapsedMap[collapsedKey] !== true;
+        // 搜索时也照常可折叠：与设置页的卡片同一套行为。
+        const expanded = collapsedMap[collapsedKey] !== true;
         const toggleGroup = function (): void {
           store.update(function (next: PluginState) {
             if (!next.options.collapsed) next.options.collapsed = {};

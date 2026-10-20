@@ -178,17 +178,22 @@ t("23 version badge matches package.json",
     flat.slice(flat.indexOf(".lo-stash-group.lo-btn"), flat.indexOf(".lo-stash-group.lo-btn") + 80));
 }
 
-/* 「注册在这个槽位、渲染在别处」的记录靠机制判，不靠点名名单：带认领钩子的记录
-   只有钩子在 scope 容器里命中才算存在，按位置兜底也跳过它们；两张列表共用同一判据。 */
+/* 「注册在这个槽位、渲染在别处」的记录靠机制判，不靠点名名单：五处槽位共用一把尺子，
+   只有这一轮投影真正标记到的行才算存在；按位置兜底也跳过带认领钩子的记录。
+   搜索时卡片与分组照旧可折叠，不能被搜索词强行拉开。 */
 {
   const flat = code.replace(/\s+/g, "");
-  t("28 declared hooks are the only evidence of existence",
-    /functionlistedInScope\(live:string\[\]\|null,scope:string,id:string\):boolean\{/.test(flat) &&
-    /return!rowHookOf\(scope,id\);/.test(flat) &&
-    /if\(scope&&rowHookOf\(scope,entries\[i\]\.id\)\)continue;/.test(flat) &&
-    /constmissing=!listedInScope\(live,item\.scope,item\.id\)\|\|\(!live&&!entry\);/.test(flat) &&
+  t("28 only projected rows count, in all five scopes",
+    /functionlistedInScope\(live:string\[\]\|null,id:string\):boolean\{/.test(flat) &&
+    /return!!live&&live\.indexOf\(id\)>=0;/.test(flat) &&
+    /constmissing=!listedInScope\(live,item\.id\);/.test(flat) &&
     !/FOREIGN_LEDGER_IDS|isForeignLedgerId/.test(flat),
     flat.slice(flat.indexOf("functionlistedInScope"), flat.indexOf("functionlistedInScope") + 80));
+  t("29 search never forces a card or group open",
+    /if\(scope&&rowHookOf\(scope,entries\[i\]\.id\)\)continue;/.test(flat) &&
+    /constcardOpen=collapsedMap\[cardKey\]!==true;/.test(flat) &&
+    /constexpanded=collapsedMap\[collapsedKey\]!==true;/.test(flat),
+    flat.slice(flat.indexOf("constcardOpen="), flat.indexOf("constcardOpen=") + 60));
 }
 
 /* 合成 id 与官方 id 的重叠必须逐条报备：合成行没有台账条目，但分类上可以属于官方

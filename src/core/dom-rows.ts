@@ -431,19 +431,18 @@ function liveRowIds(scope: string): string[] | null {
 /**
  * 某条台账记录这一轮该不该列出来。
  *
- * 声明了认领钩子的记录以「钩子在本 scope 容器里命中」为唯一正证据：整个 scope 不在屏幕上时
- * 也不退守台账。这类记录可能注册在这个槽位、实际却渲染在别处（Trae / WorkBuddy 的额度读数
- * 注册在停靠行、画在对话框里），台账里永远有它，退守就会列出一条点不动、也收纳不掉的影子行。
+ * 五处槽位用同一把尺子：只列这一轮投影真正标记到的行（`liveRowIds` 的成员）。台账里有记录、
+ * DOM 里却没有元素的，一律不列——它们可能注册在这个槽位、实际渲染在别处（Trae / WorkBuddy
+ * 的额度读数注册在停靠行、画在对话框里），列出来就是一条点不动、也收纳不掉的影子行。
+ *
+ * scope 整个不在屏幕上时（`live` 为 null）同样不列：没有正证据就不假装它在。
  *
  * @param live `liveRowIds` 的结果（null 表示该 scope 不在屏幕上）。
- * @param scope scope 键。
  * @param id 记录 id。
  * @returns 该列则为 true。
  */
-function listedInScope(live: string[] | null, scope: string, id: string): boolean {
-  if (live) return live.indexOf(id) >= 0;
-  // 没有正证据可依：声明过钩子的记录一律不列，其余退回台账（屏幕上不出现也照旧能配）。
-  return !rowHookOf(scope, id);
+function listedInScope(live: string[] | null, id: string): boolean {
+  return !!live && live.indexOf(id) >= 0;
 }
 
 /**

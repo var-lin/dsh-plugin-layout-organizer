@@ -42,21 +42,21 @@ function scopeEntries(ctx: CtxLike, state: PluginState, scope: string): ScopeEnt
   for (i = 0; i < synthetic.length; i++) if (ids.indexOf(synthetic[i]) < 0) ids.push(synthetic[i]);
   const order = reconcileOrder(state, scope, ids);
 
-  // 只列屏幕上真正存在的行。声明了认领钩子的记录以「钩子命中」为唯一正证据：整条 scope 不在
-  // 屏幕上时不退守台账——注册在这个槽位、实际渲染在别处的插件（Trae / WorkBuddy 的额度读数）
-  // 在台账里永远有记录，退守就会把它们列成点不动的影子行。
+  // 只列屏幕上真正存在的行，五处槽位同一把尺子（见 listedInScope）：台账里有记录、这一轮
+  // 投影却没标记到的，一律不列——注册在这个槽位、实际渲染在别处的插件（Trae / WorkBuddy 的
+  // 额度读数）在台账里永远有记录，列出来就是点不动、也收纳不掉的影子行。
   const live = liveRowIds(scope);
   const listed: string[] = [];
   for (i = 0; i < order.length; i++) {
     const id = order[i];
-    if (!listedInScope(live, scope, id)) continue;
+    if (!listedInScope(live, id)) continue;
     if (byId[id] || synthetic.indexOf(id) >= 0) listed.push(id);
   }
   // 协调后顺序里没见过的行按账本顺序追加在末尾，而不是悄悄消失。
   for (i = 0; i < entries.length; i++) {
     const id = entries[i].id;
     if (listed.indexOf(id) >= 0) continue;
-    if (!listedInScope(live, scope, id)) continue;
+    if (!listedInScope(live, id)) continue;
     listed.push(id);
   }
 
@@ -147,8 +147,8 @@ function ScopeCard(props: ScopeCardProps): any {
   // 折叠状态与设置页里那些「有下属行」的开关共用 options.collapsed，键带 card: 前缀互不牵连。
   const collapsedMap: Record<string, boolean> = state.options.collapsed || {};
   const cardKey = "card:" + scope;
-  // 搜索时强制展开：命中的行藏在收起的卡片里，搜索就等于没搜到。
-  const cardOpen = query ? true : collapsedMap[cardKey] !== true;
+  // 搜索时也照常可折叠：用户自己收起的卡片不该因为输入了搜索词就被强行拉开。
+  const cardOpen = collapsedMap[cardKey] !== true;
 
   const rows: any[] = [];
   // 混合排序打开时整条列表算一个组

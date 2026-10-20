@@ -3,6 +3,16 @@
 本项目的所有重要变更都记录在这里。
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [1.2.3] - 2026-10-20
+
+### 变更
+
+- **五处槽位统一只列屏幕上真实存在的行**：侧边栏顶部、侧边栏底部、对话标签、输入框停靠行与设置页导航现在用同一把尺子（原来只有停靠行这么做）——只有这一轮真正标记到按钮的行才进设置页与收纳包，台账里有记录、界面上却没有元素的不再列出来，也不会被按位置错认成别的行；某个位置当前不在屏幕上时，对应卡片就是空的。
+
+### 修复
+
+- **搜索时收起的卡片 / 分组被强行展开**：1.2.2 里一输入搜索词，之前收起的卡片与分组会被全部弹开，而且点标题也折不回去。现在搜索期间照旧可以折叠 / 展开，收起的卡片与分组不会被搜索词拉开。
+
 ## [1.2.2] - 2026-10-20
 
 ### 新增
@@ -106,6 +116,7 @@
 - 官方 / 第三方分类依赖内置 id 白名单，因为槽位条目没有可靠的来源字段；任何行都可以在设置页手动改判。
 - 「收纳」不是卸载；被收纳的按钮只是隐藏，其插件仍在运行。
 
+[1.2.3]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.3
 [1.2.2]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.2
 [1.2.1]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.1
 [1.2.0]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.0
