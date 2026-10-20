@@ -396,6 +396,10 @@ function writeOrder(state: PluginState, scope: string, ids: string[]): void {
 /**
  * 在行自己所属的组内移动一行。
  *
+ * 保存的顺序只有拖动才会写（见 `writeOrder`）；全新配置下 `order` 是空的，
+ * 若只认它，设置页的 ↑ / ↓ 与右键菜单的上移 / 下移看着可点、点下去毫无反应。
+ * 因此保存顺序里找不到这一行时，以屏幕上的当前顺序为基准（`liveOrder`，去掉已收纳的行）。
+ *
  * @param state 当前状态，命中的话原地改写 `order`。
  * @param scope 槽位 key。
  * @param id 要移动的行。
@@ -404,7 +408,13 @@ function writeOrder(state: PluginState, scope: string, ids: string[]): void {
  * @returns 是否真的移动了；false 表示行不在列表里或该方向没有同组行。
  */
 function moveRow(state: PluginState, scope: string, id: string, delta: number, group?: string): boolean {
-  const list = (state.order[scope] || []).slice();
+  const saved = state.order[scope] || [];
+  let list = saved.slice();
+  if (list.indexOf(id) < 0) {
+    const live = liveOrder(scope);
+    list = [];
+    for (let i = 0; i < live.length; i++) if (!isHidden(state, scope, live[i])) list.push(live[i]);
+  }
   const from = list.indexOf(id);
   if (from < 0) return false;
   let target = -1;

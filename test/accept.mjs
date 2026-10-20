@@ -64,6 +64,14 @@ t("12 collapsible rows with rotating caret", /onToggleCollapse/.test(code) && /l
 /* 各行不再各自带 `el.oncontextmenu`；`src/core/dom-menu.ts` 在 `window` 上委托了一个
    捕获阶段的 `contextmenu` 监听，再从目标元素反查所属的行。 */
 t("13 context menu up/down/stash", /contextmenu/.test(code) && /openMenu/.test(code));
+/* 右键菜单第四项直接把这一行改判成官方 / 第三方：文案写目标分类（看着是第三方就写「官方」），
+   动作只改本插件的本地覆盖 `state.kinds`，不动插件本身。菜单由 `menuActionsFor` 生成，
+   界面行与设置页列表行两个入口共用，因此只断言这一处。 */
+t("13b context menu reclassifies official / third-party",
+  /MENU_ICON_SWITCH/.test(code) &&
+  existsSync(join(root, "assets", "icons", "switch.svg")) &&
+  /next\.kinds\[scope \+ ":" \+ id\] = official \? "third" : "official"/.test(code),
+  (code.match(/MENU_ICON_SWITCH/g) || []).length + " refs");
 t("14 wording is 按钮收纳包", locale.includes("按钮收纳包"));
 /* 分页里的滚动区是定高 flex 列：卡片与收纳行若允许收缩，就会被压扁成「只剩卡片头」，
    内容互相压住。三处滚动区都必须显式关掉收缩。 */
@@ -168,6 +176,19 @@ t("23 version badge matches package.json",
     /\.lo-stash-group\.lo-btn\{[^}]*font-weight:400/.test(flat) &&
     /\.lo-card-action\.lo-btn\{[^}]*font-weight:400/.test(flat),
     flat.slice(flat.indexOf(".lo-stash-group.lo-btn"), flat.indexOf(".lo-stash-group.lo-btn") + 80));
+}
+
+/* 「注册在这个槽位、渲染在别处」的记录靠机制判，不靠点名名单：带认领钩子的记录
+   只有钩子在 scope 容器里命中才算存在，按位置兜底也跳过它们；两张列表共用同一判据。 */
+{
+  const flat = code.replace(/\s+/g, "");
+  t("28 declared hooks are the only evidence of existence",
+    /functionlistedInScope\(live:string\[\]\|null,scope:string,id:string\):boolean\{/.test(flat) &&
+    /return!rowHookOf\(scope,id\);/.test(flat) &&
+    /if\(scope&&rowHookOf\(scope,entries\[i\]\.id\)\)continue;/.test(flat) &&
+    /constmissing=!listedInScope\(live,item\.scope,item\.id\)\|\|\(!live&&!entry\);/.test(flat) &&
+    !/FOREIGN_LEDGER_IDS|isForeignLedgerId/.test(flat),
+    flat.slice(flat.indexOf("functionlistedInScope"), flat.indexOf("functionlistedInScope") + 80));
 }
 
 /* 合成 id 与官方 id 的重叠必须逐条报备：合成行没有台账条目，但分类上可以属于官方

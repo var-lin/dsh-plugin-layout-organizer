@@ -32,35 +32,46 @@ function scopeEntries(ctx: CtxLike, state: PluginState, scope: string): ScopeEnt
   const byId: Record<string, ScopeEntry> = {};
   let i: number;
   for (i = 0; i < entries.length; i++) byId[entries[i].id] = entries[i];
+  // 合成行（输入框停靠行的用量百分比）不是 slot 记录、台账里没有条目，但它确实在屏幕上，
+  // 也要能在这张卡片里排序、收纳，因此按屏幕上的正证据补进来（见 syntheticIdsOf）。
+  const synthetic = syntheticIdsOf(scope);
 
   // 顺序由 `reconcileOrder` 重算，不从 DOM 读回
   const ids: string[] = [];
   for (i = 0; i < entries.length; i++) ids.push(entries[i].id);
+  for (i = 0; i < synthetic.length; i++) if (ids.indexOf(synthetic[i]) < 0) ids.push(synthetic[i]);
   const order = reconcileOrder(state, scope, ids);
 
-  // 只列屏幕上真正存在的行
+  // 只列屏幕上真正存在的行。声明了认领钩子的记录以「钩子命中」为唯一正证据：整条 scope 不在
+  // 屏幕上时不退守台账——注册在这个槽位、实际渲染在别处的插件（Trae / WorkBuddy 的额度读数）
+  // 在台账里永远有记录，退守就会把它们列成点不动的影子行。
   const live = liveRowIds(scope);
   const listed: string[] = [];
   for (i = 0; i < order.length; i++) {
     const id = order[i];
-    if (live && live.indexOf(id) < 0) continue;
-    const entry = byId[id];
-    if (entry) listed.push(id);
+    if (!listedInScope(live, scope, id)) continue;
+    if (byId[id] || synthetic.indexOf(id) >= 0) listed.push(id);
   }
   // 协调后顺序里没见过的行按账本顺序追加在末尾，而不是悄悄消失。
   for (i = 0; i < entries.length; i++) {
     const id = entries[i].id;
     if (listed.indexOf(id) >= 0) continue;
-    if (live && live.indexOf(id) < 0) continue;
+    if (!listedInScope(live, scope, id)) continue;
     listed.push(id);
   }
 
   const out: ScopeEntry[] = [];
   for (i = 0; i < listed.length; i++) {
-    const entry = byId[listed[i]];
-    if (!entry) continue;
-    // 台账没给文案时用投影记下的名字（钩子文案或界面文字），不要露出裸 id。
-    const shown = entry.hasLabel ? entry.label : liveRowLabel(scope, entry.id) || hookLabel(scope, entry.id);
+    const id = listed[i];
+    const entry = byId[id];
+    // 插件指定的名字最优先（宿主没给文案的读数条），其次台账文案，再退到投影记下的名字。
+    const named = rowLabelOf(scope, id);
+    if (!entry) {
+      // 合成行没有台账文案，名字只可能来自 ROW_LABELS 或投影记下的界面文字。
+      out.push({ id: id, label: named || liveRowLabel(scope, id) || hookLabel(scope, id) || id, order: 0, hasLabel: true });
+      continue;
+    }
+    const shown = named || (entry.hasLabel ? entry.label : liveRowLabel(scope, id) || hookLabel(scope, id));
     out.push({ id: entry.id, label: shown || entry.label, order: entry.order, hasLabel: entry.hasLabel || !!shown });
   }
   return out;
@@ -132,6 +143,13 @@ function ScopeCard(props: ScopeCardProps): any {
   // 搜索没有命中这个位置时整张卡片让位，避免一屏空卡片。
   if (!entriesHit(entries, title, query)) return null;
 
+  // 折叠的是「整个一大类」——这张卡片本身（见下面的 Card），不是官方 / 第三方分组。
+  // 折叠状态与设置页里那些「有下属行」的开关共用 options.collapsed，键带 card: 前缀互不牵连。
+  const collapsedMap: Record<string, boolean> = state.options.collapsed || {};
+  const cardKey = "card:" + scope;
+  // 搜索时强制展开：命中的行藏在收起的卡片里，搜索就等于没搜到。
+  const cardOpen = query ? true : collapsedMap[cardKey] !== true;
+
   const rows: any[] = [];
   // 混合排序打开时整条列表算一个组
   const mixed = mixedOrder(state);
@@ -146,19 +164,27 @@ function ScopeCard(props: ScopeCardProps): any {
     const listGroup = mixed ? "all" : group;
     const hidden = isHidden(state, scope, id);
     const self = scope === "settings" && id === SELF_ID;
+    // 名称区能否点击跳转：与收纳包同一把尺子（见 rowNavigable），界面上点不动的行这里也灰着。
+    const canOpen = rowNavigable(scope, id);
+    const openTitle = canOpen ? t("action.goto") : t("action.static");
     const index = mixed ? entries.indexOf(entry) : groupIndex[group]++;
     const total = mixed ? entries.length : groupTotal[group];
-    (function (entry: ScopeEntry, id: string, kind: string, group: string, index: number, hidden: boolean, self: boolean) {
+    (function (entry: ScopeEntry, id: string, kind: string, group: string, index: number, hidden: boolean, self: boolean, canOpen: boolean, openTitle: string) {
       rows.push(h(RowItem, {
         key: scope + ":" + id,
         entry: entry,
         kind: kind,
-        group: listGroup,
+        group: group,
         hidden: hidden,
         self: self,
         draggable: true,
         canUp: index > 0,
         canDown: index < total - 1,
+        canOpen: canOpen,
+        openTitle: openTitle,
+        onOpen: function () {
+          navigateFromSettings(ctx, scope, id);
+        },
         onToggleKind: function () {
           store.update(function (next: PluginState) {
             next.kinds[scope + ":" + id] = kind === "official" ? "third" : "official";
@@ -166,12 +192,13 @@ function ScopeCard(props: ScopeCardProps): any {
         },
         onUp: function () {
           store.update(function (next: PluginState) {
-            moveRow(next, scope, id, -1, listGroup);
+            // 混合排序下整条 scope 就是一个组（"all"），moveRow 只认 official / third。
+            moveRow(next, scope, id, -1, group === "all" ? undefined : group);
           });
         },
         onDown: function () {
           store.update(function (next: PluginState) {
-            moveRow(next, scope, id, 1, listGroup);
+            moveRow(next, scope, id, 1, group === "all" ? undefined : group);
           });
         },
         onToggleHidden: function () {
@@ -180,16 +207,25 @@ function ScopeCard(props: ScopeCardProps): any {
           });
         },
         onMenu: function (event: MouseEvent) {
-          attachMenuAt(event, ctx, store, scope, id, listGroup);
+          attachMenuAt(event, ctx, store, scope, id, group);
         }
       }));
-    })(entry, id, kind, group, index, hidden, self);
+    })(entry, id, kind, listGroup, index, hidden, self, canOpen, openTitle);
   }
 
   // 「恢复本组默认顺序」放在卡片标题右侧：它作用于整张卡片，属于标题级动作；
   // 摆在列表末尾时，卡片越长越要先滚到底才能看见。
   return h(Card, {
     title: title,
+    // 点卡片标题收起 / 展开整个大类；搜索时强制展开（见 cardOpen）。
+    collapsed: !cardOpen,
+    onToggleCollapse: function () {
+      store.update(function (next: PluginState) {
+        if (!next.options.collapsed) next.options.collapsed = {};
+        // cardOpen 是「当前是否展开」：展开着点一下 → collapsed=true，收起着点一下 → collapsed=false。
+        next.options.collapsed[cardKey] = cardOpen;
+      });
+    },
     action: h(ConfirmBtn, {
       label: t("action.reset"),
       confirmLabel: t("action.confirmResetGroup"),

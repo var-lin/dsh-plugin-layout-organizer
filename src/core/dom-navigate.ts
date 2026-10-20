@@ -197,6 +197,28 @@ function rowNavigable(scope: string, id: string): boolean {
   return rowClickable(el);
 }
 
+/**
+ * 从设置弹窗里跳到某个按钮对应的页面。
+ *
+ * 与收纳包里的「打开对应页面」同一条路径：先抵达目标，再关掉设置弹窗。
+ * 设置行只存在于弹窗内部，因此不关弹窗，交给 `navigateTo` 的两步路由。
+ *
+ * @param ctx 上下文。
+ * @param scope 位置键。
+ * @param id 行的投影 id。
+ */
+function navigateFromSettings(ctx: CtxLike, scope: string, id: string): void {
+  if (scope === "settings") {
+    navigateTo(ctx, scope, id);
+    return;
+  }
+  navigateTo(ctx, scope, id);
+  // 在下一帧（点击派发后）关掉设置弹窗，先抵达再关闭的顺序与收纳包一致。
+  window.requestAnimationFrame(function () {
+    closeSettings();
+  });
+}
+
 function navigateTo(ctx: CtxLike, scope: string, id: string): void {
   if (scope === "settings") {
     const entries = readEntries(ctx, scope);

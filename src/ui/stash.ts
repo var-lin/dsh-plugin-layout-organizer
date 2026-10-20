@@ -15,7 +15,10 @@ interface StashItem {
 }
 
 // 「按页面」「按类型」拆成带标题的分组；字母序是扁平列表（`title` 为 `null` 的一组）。
+// `key` 是这一组的稳定身份（按类型是 kind 值、按页面是 scope 键），折叠状态用它做键，
+// 不跟着标题文案走——切语言时标题会变，键不能变。
 interface StashGroup {
+  key: string;
   title: string | null;
   rows: StashItem[];
 }
@@ -73,13 +76,14 @@ function stashView(ctx: CtxLike, state: PluginState): StashItem[] {
     const list = ledger[item.scope] || [];
     let entry: LedgerEntry | null = null;
     for (j = 0; j < list.length; j++) if (list[j].id === item.id) entry = list[j];
-    // 名字优先取台账文案，其次取投影记下的名字（钩子文案或界面文字），最后才退回 id。
-    const label = entry && entry.hasLabel ? entry.label : liveRowLabel(item.scope, item.id) || hookLabel(item.scope, item.id) || (entry ? entry.label : "") || item.id;
-    // 「找不到这一行」= 该 scope 已投影过、但这一行不在屏幕上；此时只是不能导航过去，
-    // 恢复按钮照常可用（见 StashRow）。scope 没投影过时回退到「台账里有没有」。
+    // 名字优先取插件指定的名字，其次台账文案，再取投影记下的名字（钩子文案或界面文字），最后才退回 id。
+    const label = rowLabelOf(item.scope, item.id) || (entry && entry.hasLabel ? entry.label : liveRowLabel(item.scope, item.id) || hookLabel(item.scope, item.id) || (entry ? entry.label : "") || item.id);
+    // 「找不到这一行」= 这一行不在屏幕上；此时只是不能导航过去，恢复按钮照常可用（见 StashRow）。
+    // scope 整个不在屏幕上时回退到「台账里有没有」，但声明了认领钩子的记录例外：它们可能注册在
+    // 这个槽位、实际渲染在别处（Trae / WorkBuddy 的额度读数），台账里永远有记录，不能因此让人
+    // 从收纳包里恢复一条永远渲染不出来的影子行（见 listedInScope）。
     const live = liveRowIds(item.scope);
-    // 界面上点不动的行在收纳包里也不可点（见 rowNavigable）：token-saver 那样的纯展示条
-    // 点下去只会把收纳包和设置弹窗一起关掉，看起来像「按钮坏了」。
+    const missing = !listedInScope(live, item.scope, item.id) || (!live && !entry);
     const navigable = rowNavigable(item.scope, item.id);
     out.push({
       scope: item.scope,
@@ -87,7 +91,7 @@ function stashView(ctx: CtxLike, state: PluginState): StashItem[] {
       key: item.key,
       label: label,
       kind: kindOf(state, item.scope, item.id),
-      missing: live ? live.indexOf(item.id) < 0 : !entry,
+      missing: missing,
       navigable: navigable,
       scopeLabel: spec ? t(spec.labelKey) : item.scope,
       scopeIndex: SCOPE_KEYS.indexOf(item.scope),
@@ -111,18 +115,20 @@ function sortStash(rows: StashItem[], mode: string): StashItem[] {
 }
 
 function groupStash(rows: StashItem[], mode: string): StashGroup[] {
-  if (mode === "alpha") return [{ title: null, rows: rows }];
+  if (mode === "alpha") return [{ key: "alpha", title: null, rows: rows }];
   const groups: StashGroup[] = [];
   const index: Record<string, number> = {};
   let i: number;
   for (i = 0; i < rows.length; i++) {
     const row = rows[i];
+    // 按类型分组用 kind 值做键，按页面分组用 scope 键——两者都不随语言变化。
+    const key = mode === "kind" ? row.kind : row.scope;
     const title = mode === "kind" ? t(row.kind === "official" ? "kind.official" : "kind.third") : row.scopeLabel;
-    if (index[title] === undefined) {
-      index[title] = groups.length;
-      groups.push({ title: title, rows: [] });
+    if (index[key] === undefined) {
+      index[key] = groups.length;
+      groups.push({ key: key, title: title, rows: [] });
     }
-    groups[index[title]].rows.push(row);
+    groups[index[key]].rows.push(row);
   }
   return groups;
 }
@@ -195,7 +201,7 @@ function StashRow(props: StashRowProps): any {
     },
       h("span", { className: "lo-swatch", "data-kind": row.id === SELF_ID && row.scope === "settings" ? "self" : row.kind }),
       h("span", { className: "lo-stash-label" }, row.label),
-      h("span", { className: "lo-tag" }, row.scopeLabel)
+      h("span", { className: "lo-tag" }, row.id)
     ),
     h(Btn, {
       title: t("action.restore"),
@@ -266,14 +272,47 @@ function StashPanel(props: StashPanelProps): any {
   }
 
   const body: any[] = [];
+  // 分组标题的折叠状态存在 store 里（options.collapsed），关掉收纳包再打开保持原样。
+  const collapsedMap: Record<string, boolean> = state.options.collapsed || {};
   let i: number;
   let j: number;
   for (i = 0; i < groups.length; i++) {
     (function (group: StashGroup) {
-      // 有标题的分组在标题右侧带一个「恢复本组默认」；按名称排序（alpha）没有标题，也就不放按钮。
+      // 有标题的分组在标题右侧带一个「恢复本组默认」；按名称排序（alpha）没有标题，也就不放按钮、
+      // 不做折叠——没有「类」可折。
       if (group.title) {
-        body.push(h("div", { key: "g" + i, className: "lo-stash-group" },
-          h("span", { className: "lo-stash-group-title" }, group.title),
+        const collapsedKey = "stash:" + mode + ":" + group.key;
+        // 搜索时强制展开：命中的行藏在收起的分组里，搜索就等于没搜到（计数也会对不上）。
+        const expanded = query ? true : collapsedMap[collapsedKey] !== true;
+        const toggleGroup = function (): void {
+          store.update(function (next: PluginState) {
+            if (!next.options.collapsed) next.options.collapsed = {};
+            next.options.collapsed[collapsedKey] = expanded;
+          });
+        };
+        body.push(h("div", {
+          key: "g" + i,
+          className: "lo-stash-group",
+          "data-open": expanded ? "1" : "0",
+          role: "button",
+          tabIndex: 0,
+          "aria-expanded": expanded ? "true" : "false",
+          title: t("action.toggleGroup"),
+          // 整行都是折叠开关：标题、小三角与恢复按钮右侧的空白都算，只有「恢复本组默认」自己管自己。
+          onClick: function (event: any) {
+            if (event && event.target && event.target.closest && event.target.closest(".lo-btn")) return;
+            toggleGroup();
+          },
+          onKeyDown: function (event: any) {
+            if (event && (event.key === "Enter" || event.key === " ")) {
+              event.preventDefault();
+              toggleGroup();
+            }
+          }
+        },
+          h("span", { className: "lo-stash-group-title" },
+            h("span", { className: "lo-stash-group-text" }, group.title)
+          ),
           h(ConfirmBtn, {
             label: t("action.reset"),
             confirmLabel: t("action.confirmResetGroup"),
@@ -284,8 +323,11 @@ function StashPanel(props: StashPanelProps): any {
                 for (let k = 0; k < scopes.length; k++) resetScope(next, scopes[k]);
               });
             }
-          })
+          }),
+          // 小三角在整行最右端（恢复按钮之后），与设置页卡片的标题行同一位置。
+          h("span", { className: "lo-stash-group-chev", "aria-hidden": "true" }, "\u25be")
         ));
+        if (!expanded) return;
       }
       for (j = 0; j < group.rows.length; j++) {
         (function (row: StashItem) {

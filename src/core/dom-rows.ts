@@ -175,6 +175,27 @@ function collectRowUnits(scope: string): RowUnit[] | null {
   return units;
 }
 
+/**
+ * 本轮屏幕上真实存在的合成行 id（见 `SYNTHETIC_IDS`）。
+ *
+ * 合成行不是 slot 记录、台账里没有条目，而设置页与收纳包只按台账列行——不在这里补一刀，
+ * 输入框停靠行的用量百分比就只能被投影排序、却永远排不进设置页那张卡片。
+ * 只认屏幕上真有元素的合成行：宿主没渲染它（会话还没有上下文读数）时不该出现幻影条目。
+ *
+ * @param scope scope 键。
+ * @returns 合成行 id 列表；没有合成行或合成行此刻不在屏幕上时为空数组。
+ */
+function syntheticIdsOf(scope: string): string[] {
+  const units = collectRowUnits(scope);
+  const out: string[] = [];
+  if (!units) return out;
+  for (let i = 0; i < units.length; i++) {
+    const id = units[i].id;
+    if (id && out.indexOf(id) < 0) out.push(id);
+  }
+  return out;
+}
+
 function collectRows(scope: string): HTMLElement[] | null {
   if (scope === "sidebar") return collectSidebarRows();
   if (scope === "footer") return collectFooterRows() || collectOutletRows("footer");
@@ -340,14 +361,21 @@ function pairRows(entries: LedgerEntry[], rows: HTMLElement[], stamped?: Record<
 
   // 第 3 步：没文案的记录按顺序认领剩下的行，但只在「剩下的记录数 == 剩下的行数」时才敢猜：
   // 两边数量不等，说明有记录整条渲染成空（或有行不属于任何记录），按位置猜必然把名字扣错人。
+  // 声明了认领钩子的记录不参与猜：钩子没命中就是没渲染，按位置补一条只会补出影子行
+  // ——注册在这个槽位、实际渲染在别处的插件（Trae / WorkBuddy 的额度读数）正是这样混进来的。
   const freeEntries: number[] = [];
   const freeRows: number[] = [];
-  for (let i = 0; i < entries.length; i++) if (!pairs[i].el) freeEntries.push(i);
+  for (let i = 0; i < entries.length; i++) {
+    if (pairs[i].el) continue;
+    if (scope && rowHookOf(scope, entries[i].id)) continue;
+    freeEntries.push(i);
+  }
   for (let j = 0; j < rows.length; j++) if (!used[j]) freeRows.push(j);
   if (freeEntries.length !== freeRows.length) return pairs;
   let at = 0;
   for (let i = 0; i < entries.length; i++) {
     if (pairs[i].el) continue;
+    if (scope && rowHookOf(scope, entries[i].id)) continue;
     pairs[i].el = rows[freeRows[at++]];
   }
   return pairs;
@@ -398,6 +426,24 @@ function liveRowIds(scope: string): string[] | null {
   const out: string[] = [];
   for (let i = 0; i < rows.length; i++) out.push(rows[i].id);
   return out;
+}
+
+/**
+ * 某条台账记录这一轮该不该列出来。
+ *
+ * 声明了认领钩子的记录以「钩子在本 scope 容器里命中」为唯一正证据：整个 scope 不在屏幕上时
+ * 也不退守台账。这类记录可能注册在这个槽位、实际却渲染在别处（Trae / WorkBuddy 的额度读数
+ * 注册在停靠行、画在对话框里），台账里永远有它，退守就会列出一条点不动、也收纳不掉的影子行。
+ *
+ * @param live `liveRowIds` 的结果（null 表示该 scope 不在屏幕上）。
+ * @param scope scope 键。
+ * @param id 记录 id。
+ * @returns 该列则为 true。
+ */
+function listedInScope(live: string[] | null, scope: string, id: string): boolean {
+  if (live) return live.indexOf(id) >= 0;
+  // 没有正证据可依：声明过钩子的记录一律不列，其余退回台账（屏幕上不出现也照旧能配）。
+  return !rowHookOf(scope, id);
 }
 
 /**

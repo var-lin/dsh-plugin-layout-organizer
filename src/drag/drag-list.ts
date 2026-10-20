@@ -170,8 +170,9 @@ function createListDragController(store: StoreHandle): { attach: () => void; det
 
   function onDown(event: PointerEvent): void {
     if (event.button !== 0) return;
-    // 行内的按钮（上移、下移、收纳）必须保持可点击。
-    if (event.target instanceof Element && event.target.closest("button")) return;
+    // 行内的动作按钮（改判、上移、下移、收纳）必须保持可点击；名称区是行本身的一部分，
+    // 仍可以按住它拖动，点击与拖拽靠阈值区分（拖动一旦开始，onClickCapture 会吞掉这次 click）。
+    if (event.target instanceof Element && event.target.closest(".lo-btn")) return;
     const row = rowFrom(event.target);
     if (!row) return;
     const container = row.parentElement;

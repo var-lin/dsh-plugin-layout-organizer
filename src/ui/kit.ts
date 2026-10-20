@@ -33,6 +33,10 @@ interface CardProps {
   title?: any;
   // 标题行右侧的动作区（如「恢复本组默认顺序」）；不传就只有标题。
   action?: any;
+  // 传了 `onToggleCollapse` 时标题行变成折叠开关：点标题（不含右侧动作区）收起 / 展开卡片正文。
+  // `collapsed` 是「当前已收起」，由调用方存进 store。
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
   children?: any;
 }
 
@@ -93,6 +97,11 @@ interface RowItemProps {
   hidden?: boolean;
   canUp?: boolean;
   canDown?: boolean;
+  // 名称区可否点击跳转；为假时名称区灰着、点不动（见 rowNavigable）。
+  canOpen?: boolean;
+  // 名称区的悬停提示：说清点下去会去哪儿，或说明为什么点不动。
+  openTitle?: string;
+  onOpen?: () => void;
   onMenu?: (event: any) => void;
   onToggleKind?: () => void;
   onUp?: () => void;
@@ -214,14 +223,42 @@ function Field(props: FieldProps): any {
  * @returns 卡片元素。
  */
 function Card(props: CardProps): any {
-  return h("section", { className: "lo-card" },
+  const toggle = props.onToggleCollapse;
+  const open = props.collapsed !== true;
+  return h("section", {
+    className: "lo-card",
+    "data-collapsible": toggle ? "1" : undefined,
+    "data-open": toggle ? (open ? "1" : "0") : undefined
+  },
     props.title || props.action
-      ? h("header", { className: "lo-card-head" },
+      ? h("header", {
+          className: "lo-card-head",
+          // 点右侧动作区不算折叠：那是卡片级动作，自己管自己。
+          onClick: toggle
+            ? function (event: any) {
+                if (event && event.target && event.target.closest && event.target.closest(".lo-card-action")) return;
+                toggle();
+              }
+            : undefined,
+          role: toggle ? "button" : undefined,
+          tabIndex: toggle ? 0 : undefined,
+          onKeyDown: toggle
+            ? function (event: any) {
+                if (event && (event.key === "Enter" || event.key === " ")) {
+                  event.preventDefault();
+                  toggle();
+                }
+              }
+            : undefined
+        },
           props.title ? h("span", { className: "lo-card-title" }, props.title) : null,
-          props.action ? h("span", { className: "lo-card-action" }, props.action) : null
+          props.action ? h("span", { className: "lo-card-action" }, props.action) : null,
+          // 小三角在标题行最右端（动作区之后）：它是整行的状态指示，不该插在标题与动作之间。
+          toggle ? h("span", { className: "lo-card-caret", "aria-hidden": "true" }, "\u25be") : null
         )
       : null,
-    h("div", { className: "lo-card-body" }, props.children)
+    // 收起时整段正文不渲染：留着高度会让「折叠」看起来没生效。
+    toggle && !open ? null : h("div", { className: "lo-card-body" }, props.children)
   );
 }
 
@@ -300,11 +337,16 @@ function ConfirmBtn(props: { label: string; confirmLabel: string; onConfirm: () 
 /**
  * 管理列表里的一行；`self` 是插件自己的设置条目（色块颜色不同，其余行为一致）。
  *
+ * 名称区（色块 + 名称 + id）是一块可点区域，点它跳转到这个按钮对应的页面，
+ * 行为与收纳包里的同一行一致；右侧四个动作按钮不受影响。
+ * 界面上本来点不动的行（`canOpen` 为假）名称区灰着且不可点——可点却毫无反应比灰着更像坏掉。
+ *
  * @param props 行数据与各动作回调，见 RowItemProps。
  * @returns 列表行元素。
  */
 function RowItem(props: RowItemProps): any {
   const entry = props.entry;
+  const canOpen = props.canOpen === true;
   return h("div", {
     className: "lo-row",
     "data-lo-list-id": entry.id,
@@ -314,9 +356,19 @@ function RowItem(props: RowItemProps): any {
     onContextMenu: props.onMenu
   },
     h("span", { className: "lo-grip", title: props.draggable ? t("action.drag") : undefined }, "\u22ee\u22ee"),
-    h("span", { className: "lo-swatch", "data-kind": props.self ? "self" : props.kind }),
-    h("span", { className: "lo-row-name", title: entry.label }, entry.label),
-    h("span", { className: "lo-row-id" }, entry.id),
+    h("button", {
+      type: "button",
+      className: "lo-row-open",
+      disabled: !canOpen,
+      title: props.openTitle || undefined,
+      onClick: function () {
+        if (canOpen && props.onOpen) props.onOpen();
+      }
+    },
+      h("span", { className: "lo-swatch", "data-kind": props.self ? "self" : props.kind }),
+      h("span", { className: "lo-row-name", title: entry.label }, entry.label),
+      h("span", { className: "lo-row-id" }, entry.id)
+    ),
     h(Btn, { onClick: props.onToggleKind, title: t("action.toggleKind") }, props.kind === "official" ? t("kind.official") : t("kind.third")),
     h(Btn, { size: "icon", onClick: props.onUp, disabled: !props.canUp, title: t("action.up") }, "\u2191"),
     h(Btn, { size: "icon", onClick: props.onDown, disabled: !props.canDown, title: t("action.down") }, "\u2193"),

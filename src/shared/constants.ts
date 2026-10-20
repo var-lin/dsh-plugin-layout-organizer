@@ -1,7 +1,7 @@
 const PLUGIN_ID = "dsh-plugin-layout-organizer";
 // 设置页大标题右侧展示的版本号。必须与 package.json 的 version 逐字一致——
 // test/accept.mjs 会断言两处相等，改版本时忘了同步这里会当场失败，而不是悄悄显示旧号。
-const PLUGIN_VERSION = "1.2.1";
+const PLUGIN_VERSION = "1.2.2";
 const NS = "layout-organizer";
 const STORAGE_KEY = "dsh.layout-organizer.state.v5";
 const STATE_VERSION = 5;
@@ -119,6 +119,31 @@ function rowHookOf(scope: string, id: string): RowHook | null {
   const table = ROW_HOOKS[scope];
   if (!table) return null;
   return table[id] || null;
+}
+
+// 宿主既没给台账文案、屏幕上又只有一串读数（药丸上写着「12.3K tokens」这类动态内容）的记录，
+// 由插件补一个稳定名字。值是 locale 词条名，不是 id 的中文直译。
+// 台账真给了文案时仍以台账为准（见 displayLabel）。
+const ROW_LABELS: Record<string, Record<string, string>> = {
+  composer: {
+    activity: "row.activity",
+    usage: "row.usage",
+    "context-meter": "row.context-meter"
+  }
+};
+
+/**
+ * 取某条记录在插件里指定的显示名。
+ *
+ * @param scope scope 键。
+ * @param id 记录 id。
+ * @returns 当前语言下的名字；没指定时返回空字符串，由调用方继续往后退。
+ */
+function rowLabelOf(scope: string, id: string): string {
+  const table = ROW_LABELS[scope];
+  if (!table) return "";
+  const key = table[id];
+  return key ? t(key) : "";
 }
 
 // 写在受管行上的属性名集中在一处：每个标记在 `applyScope` 设置、`clearMarks` 清除，样式表只针对这些属性。

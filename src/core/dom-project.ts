@@ -52,6 +52,9 @@ function isSynthetic(scope: string, id: string): boolean {
  */
 function displayLabel(scope: string, id: string, label: string): string {
   if (label) return label;
+  // 插件指定的名字优先于钩子文案与屏幕上的动态读数（药丸上写的是数字，不是名字）。
+  const named = rowLabelOf(scope, id);
+  if (named) return named;
   const hooked = hookLabel(scope, id);
   if (hooked) return hooked;
   const live = liveRowLabel(scope, id);

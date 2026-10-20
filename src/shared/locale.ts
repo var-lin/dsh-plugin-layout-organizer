@@ -43,6 +43,13 @@ const ZH: Record<string, string> = {
 
   "kind.official": "官方",
   "kind.third": "第三方",
+  "group.count": "{count} 个",
+  "action.toggleGroup": "折叠 / 展开这一组",
+
+  // 宿主没给文案的几条记录由插件补名字（见 ROW_LABELS）：按功能命名，不是把 id 直译成中文。
+  "row.activity": "会话统计",
+  "row.usage": "用量统计",
+  "row.context-meter": "上下文用量",
 
   "action.toggleKind": "切换官方 / 第三方分类",
   "action.stash": "收纳",
@@ -149,6 +156,12 @@ const EN: Record<string, string> = {
 
   "kind.official": "Official",
   "kind.third": "Third-party",
+  "group.count": "{count}",
+  "action.toggleGroup": "Collapse / expand this group",
+
+  "row.activity": "Session stats",
+  "row.usage": "Token usage",
+  "row.context-meter": "Context usage",
 
   "action.toggleKind": "Toggle official / third-party",
   "action.stash": "Stash",

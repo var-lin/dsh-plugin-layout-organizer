@@ -104,16 +104,21 @@ function uninstallMenuBindings(): void {
 /**
  * 轴向由 scope 表声明；`group` 为 "all" 表示混合排序：整条 scope 就是一个组，没有跨组限制。
  *
- * @param store 状态句柄，菜单项执行时经它改写顺序与收纳状态。
+ * 菜单位置按动作类别聚拢：两个排序动作在前，改判官方 / 第三方居中，收纳 / 恢复收尾。
+ * 改判项的文案直接写目标分类（当前是第三方就写「官方」），因为面板里看不到这一行现在归哪类，
+ * 写「切换」只会让人猜点下去会变成什么。分类只是本地覆盖（见 `store.kinds`），不动插件本身。
+ *
+ * @param store 状态句柄，菜单项执行时经它改写顺序、分类与收纳状态。
  * @param scope 槽位 key。
  * @param id 右键点中的行 id。
  * @param group 限定组；"all" 表示整条 scope 一个组。
  * @param axis 轴向，"x" 时文案与图标取左右，其余取上下。
- * @returns 移动（上/下或左/右）与收纳/恢复共三个动作，其中不可用方向按行在组内的位置置 disabled。
+ * @returns 移动（上/下或左/右）、改判官方 / 第三方与收纳 / 恢复共四个动作，其中不可用方向按行在组内的位置置 disabled。
  */
 function menuActionsFor(store: StoreHandle, scope: string, id: string, group: string, axis: string): MenuAction[] {
   const state = store.get();
   const hidden = isHidden(state, scope, id);
+  const official = kindOf(state, scope, id) === "official";
   const ids = liveOrder(scope) || [];
   const groupIds: string[] = [];
   for (let i = 0; i < ids.length; i++) {
@@ -140,6 +145,16 @@ function menuActionsFor(store: StoreHandle, scope: string, id: string, group: st
       run: function () {
         store.update(function (next) {
           moveRow(next, scope, id, 1, bound);
+        });
+      }
+    },
+    {
+      label: official ? t("kind.third") : t("kind.official"),
+      icon: MENU_ICON_SWITCH,
+      disabled: false,
+      run: function () {
+        store.update(function (next) {
+          next.kinds[scope + ":" + id] = official ? "third" : "official";
         });
       }
     },

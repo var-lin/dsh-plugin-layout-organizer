@@ -46,15 +46,21 @@ const CSS_TEXT: string[] = [
   ".lo-chip[aria-pressed='true']{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-inverted,#fff)}",
   ".lo-chip:hover{border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary)}",
   ".lo-chip[aria-pressed='true']:hover{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-inverted,#fff);filter:brightness(1.08)}",
-  ".lo-stash-body{flex:1 1 auto;min-height:0;overflow:auto;padding:4px 12px 14px;display:flex;flex-direction:column;gap:4px}",
+  ".lo-stash-body{flex:1 1 auto;min-height:0;overflow:auto;padding:4px 12px 14px;display:flex;flex-direction:column;gap:4px;scrollbar-gutter:stable}",
   // 收纳包列表是固定高度的滚动区，行与分组标题都必须按内容定高。
   ".lo-stash-body>*{flex:0 0 auto}",
   // 分组标题行：名称靠左，右侧是「恢复本组默认」；两端对齐靠 .lo-stash-group-title 的 flex:1。
-  ".lo-stash-group{display:flex;align-items:center;gap:10px;padding:12px 8px 6px;font-size:11px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}",
-  ".lo-stash-group-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  // 整行都是折叠开关（含小三角与恢复按钮右侧的空白），所以整行给手型光标。
+  ".lo-stash-group{display:flex;align-items:center;gap:10px;padding:12px 8px 6px;font-size:11px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--dsw-alias-label-secondary);cursor:pointer;-webkit-user-select:none;user-select:none}",
+  // 标题本身是折叠开关的一部分：整块可点，箭头跟着展开状态转。
+  ".lo-stash-group-title{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:6px;padding:0;border:0;background:transparent;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;text-align:left;cursor:pointer}",
+  ".lo-stash-group:hover{color:var(--dsw-alias-label-primary)}",
+  ".lo-stash-group-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  ".lo-stash-group-chev{flex:0 0 auto;display:inline-block;width:10px;font-size:10px;line-height:1;transition:transform .12s ease}",
+  ".lo-stash-group[data-open='0'] .lo-stash-group-chev{transform:rotate(-90deg)}",
   // 组标题上的恢复按钮比行内的更小：它是分组级的次级动作，不该和每行的「恢复」抢注意力。
   // 字重压回 400：分组标题行是 600，按钮继承下来会显得加粗，和旁边的标题一样重。
-  ".lo-stash-group .lo-btn{flex:0 0 auto;min-height:22px;padding:0 8px;font-size:11px;font-weight:400;border-radius:6px;text-transform:none;letter-spacing:0}",
+  ".lo-stash-group .lo-btn{flex:0 0 auto;min-height:22px;padding:0 8px;font-size:11px;font-weight:400;border-radius:6px;text-transform:none;letter-spacing:0;cursor:pointer}",
   ".lo-stash-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px}",
   ".lo-stash-row:hover{background:var(--dsw-alias-bg-layer-1)}",
   // 恢复按钮不参与收缩，也不换行：标签再长也只占它自己的量，名字那一侧自己打点。
@@ -127,8 +133,14 @@ const CSS_TEXT: string[] = [
   ".lo-card-head{padding:11px 14px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary)}",
   // 标题行右侧动作区：卡片级动作（恢复本组默认顺序）放这里，比卡片底部那条更早被看见。
   // 标题行恒为 flex 行：没有动作时只有 .lo-card-title 一个子项，外观与原来的纯文本标题一致。
-  ".lo-card-head{display:flex;align-items:center;gap:12px}",
+  ".lo-card-head{display:flex;align-items:center;gap:12px;-webkit-user-select:none;user-select:none}",
+  // 卡片标题是可点的折叠开关：光标给出手势，悬停时标题变主题色。
+  ".lo-card[data-collapsible='1']>.lo-card-head{cursor:pointer}",
+  ".lo-card[data-collapsible='1']>.lo-card-head:hover .lo-card-title{color:var(--dsw-alias-brand-primary)}",
   ".lo-card-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  // 小三角紧跟类名（与收纳包分组标题同一位置）：展开朝下、收起转 -90°。
+  ".lo-card-caret{flex:0 0 auto;display:inline-block;width:10px;font-size:10px;line-height:1;color:var(--dsw-alias-label-secondary);transition:transform .12s ease}",
+  ".lo-card[data-open='0'] .lo-card-caret{transform:rotate(-90deg)}",
   ".lo-card-action{flex:0 0 auto;display:flex;align-items:center;gap:8px}",
   // 卡片标题上的恢复按钮比正文小一号：它是标题级次级动作，不跟标题抢视觉重量。
   // 字重同样压回 400——卡片标题是 600，按钮继承会变粗。
@@ -187,6 +199,11 @@ const CSS_TEXT: string[] = [
   ".lo-row[data-lo-dragging='1']{cursor:grabbing}",
   ".lo-grip{flex:0 0 auto;width:14px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:11px;line-height:1;letter-spacing:-1px;cursor:grab}",
   ".lo-grip[data-locked='1']{opacity:.28;cursor:default}",
+  // 名称区是一块可点区域：吃掉行内剩余宽度，点它跳转到这个按钮对应的页面（与收纳包同一行为）。
+  ".lo-row-open{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:8px;padding:0;border:0;border-radius:7px;background:transparent;font:inherit;text-align:left;cursor:pointer}",
+  ".lo-row-open:hover .lo-row-name{color:var(--dsw-alias-brand-primary)}",
+  ".lo-row-open:disabled{cursor:default}",
+  ".lo-row-open:disabled:hover .lo-row-name{color:var(--dsw-alias-label-primary)}",
   ".lo-row-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--dsw-alias-label-primary)}",
   ".lo-row-id{flex:0 0 auto;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-secondary)}",
   ".lo-swatch{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-label-secondary)}",
