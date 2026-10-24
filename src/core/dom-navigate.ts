@@ -233,8 +233,8 @@ function navigateTo(ctx: CtxLike, scope: string, id: string): void {
     return;
   }
 
-  // 侧边栏优先走官方 selectPanel API。
-  if (scope === "sidebar") {
+  // 侧边栏优先走官方 selectPanel API；合成行（「更多」）不是面板 id，走它会把主区切到不存在的面板。
+  if (scope === "sidebar" && !isSynthetic(scope, id)) {
     try {
       const layout = ctx.get("layout") as LayoutService | null;
       if (layout && typeof layout.selectPanel === "function") {

@@ -72,7 +72,8 @@ t("13b context menu reclassifies official / third-party",
   existsSync(join(root, "assets", "icons", "switch.svg")) &&
   /next\.kinds\[scope \+ ":" \+ id\] = official \? "third" : "official"/.test(code),
   (code.match(/MENU_ICON_SWITCH/g) || []).length + " refs");
-t("14 wording is 按钮收纳包", locale.includes("按钮收纳包"));
+/* 收纳包对用户改叫「悬浮框」：那个词既不准确（它本来就飘着）又不好听。 */
+t("14 wording is 悬浮框", locale.includes("悬浮框") && !locale.includes("收纳包"));
 /* 分页里的滚动区是定高 flex 列：卡片与收纳行若允许收缩，就会被压扁成「只剩卡片头」，
    内容互相压住。三处滚动区都必须显式关掉收缩。 */
 {
@@ -199,7 +200,7 @@ t("23 version badge matches package.json",
 /* 合成 id 与官方 id 的重叠必须逐条报备：合成行没有台账条目，但分类上可以属于官方
    （`composer:context-meter` 就是这种情况）。没报备的重叠说明有人把合成行当台账行写了。 */
 {
-  const ALLOWED_OVERLAP = ["composer:context-meter"];
+  const ALLOWED_OVERLAP = ["composer:context-meter", "sidebar:more"];
   const officialStart = constants.indexOf("const OFFICIAL_IDS");
   const officialEnd = constants.indexOf("HIDDEN_LEDGER_IDS");
   const syntheticStart = constants.indexOf("const SYNTHETIC_IDS");

@@ -173,6 +173,7 @@ function ScopeCard(props: ScopeCardProps): any {
       rows.push(h(RowItem, {
         key: scope + ":" + id,
         entry: entry,
+        scope: scope,
         kind: kind,
         group: group,
         hidden: hidden,
@@ -206,6 +207,14 @@ function ScopeCard(props: ScopeCardProps): any {
             setHidden(next, scope, id, !hidden);
           });
         },
+        // 「更多」只对能收进去的槽位有意义（侧边栏 / 底部 / 标签 / 停靠行）；设置行没有容器可去。
+        intoMore: moreScopeOk(scope) && isIntoMore(state, scope, id),
+        onToggleMore: moreScopeOk(scope) ? function () {
+          const into = isIntoMore(store.get(), scope, id);
+          store.update(function (next: PluginState) {
+            setIntoMore(next, scope, id, !into);
+          });
+        } : undefined,
         onMenu: function (event: MouseEvent) {
           attachMenuAt(event, ctx, store, scope, id, group);
         }

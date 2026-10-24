@@ -27,6 +27,9 @@ interface StashRowProps {
   row: StashItem;
   onOpen: (row: StashItem) => void;
   onRestore: (row: StashItem) => void;
+  // 收进官方「更多」菜单：只有能收进去的槽位才给这个按钮（见 moreScopeOk）。
+  canIntoMore?: boolean;
+  onIntoMore?: (row: StashItem) => void;
 }
 
 interface StashPanelProps {
@@ -76,13 +79,16 @@ function stashView(ctx: CtxLike, state: PluginState): StashItem[] {
     const list = ledger[item.scope] || [];
     let entry: LedgerEntry | null = null;
     for (j = 0; j < list.length; j++) if (list[j].id === item.id) entry = list[j];
-    // 名字优先取插件指定的名字，其次台账文案，再取投影记下的名字（钩子文案或界面文字），最后才退回 id。
-    const label = rowLabelOf(item.scope, item.id) || (entry && entry.hasLabel ? entry.label : liveRowLabel(item.scope, item.id) || hookLabel(item.scope, item.id) || (entry ? entry.label : "") || item.id);
+    // 取名字的规则与「更多」菜单共用一处（见 rowLabelText），两处才叫同一个名字。
+    const label = rowLabelText(ctx, item.scope, item.id);
     // 「找不到这一行」= 这一行不在屏幕上；此时只是不能导航过去，恢复按钮照常可用（见 StashRow）。
     // 五处槽位同一把尺子（见 listedInScope）：只有这一轮投影真正标记到的行才算存在，scope 整个
     // 不在屏幕上时也不退守台账——否则会留下一条永远渲染不出来的影子行让人去恢复。
     const live = liveRowIds(item.scope);
     const missing = !listedInScope(live, item.id);
+    // 设置页的行只在设置弹窗那一页才投影得到，可那扇弹窗随时能打开，所以照样算「存在」
+    // （与 `rowNavigable` 里对 settings 的例外一致）；其余四处没投影到就是真不在屏幕上。
+    const unlisted = missing && item.scope !== "settings";
     const navigable = rowNavigable(item.scope, item.id);
     out.push({
       scope: item.scope,
@@ -90,7 +96,7 @@ function stashView(ctx: CtxLike, state: PluginState): StashItem[] {
       key: item.key,
       label: label,
       kind: kindOf(state, item.scope, item.id),
-      missing: missing,
+      missing: unlisted,
       navigable: navigable,
       scopeLabel: spec ? t(spec.labelKey) : item.scope,
       scopeIndex: SCOPE_KEYS.indexOf(item.scope),
@@ -188,6 +194,7 @@ function StashRow(props: StashRowProps): any {
   let hint = t("action.goto");
   if (row.missing) hint = t("scope.missing");
   else if (!row.navigable) hint = t("action.static");
+  const icon = rowIconOf(row.scope, row.id);
   return h("div", { className: "lo-stash-row" },
     h("button", {
       type: "button",
@@ -198,12 +205,24 @@ function StashRow(props: StashRowProps): any {
         props.onOpen(row);
       }
     },
-      h("span", { className: "lo-swatch", "data-kind": row.id === SELF_ID && row.scope === "settings" ? "self" : row.kind }),
+      h(RowIcon, { svg: icon, text: row.label }),
       h("span", { className: "lo-stash-label" }, row.label),
       h("span", { className: "lo-tag" }, row.id)
     ),
+    // 「进更多」放在「恢复」左边：级别由近到远是「列表 → 更多 → 悬浮框」，
+    // 从左到右正好是「进更多」再「恢复回列表」（用户 m06865#2 指定这个顺序）。
+    // 哪几处槽位有「更多」这个容器不归这里管，问 `moreScopeOk`。
+    props.canIntoMore && props.onIntoMore
+      ? h(Btn, {
+        title: t("action.intoMore"),
+        onClick: function () {
+          props.onIntoMore(row);
+        }
+      }, t("action.intoMore"))
+      : null,
     h(Btn, {
       title: t("action.restore"),
+      variant: "soft",
       onClick: function () {
         props.onRestore(row);
       }
@@ -250,6 +269,18 @@ function StashPanel(props: StashPanelProps): any {
   function restore(row: StashItem): void {
     store.update(function (next: PluginState) {
       setHidden(next, row.scope, row.id, false);
+    });
+  }
+
+  /**
+   * 直接从收纳包挪进「更多」：两处收纳互斥，`setIntoMore` 会顺手摘掉 hidden 键，
+   * 于是这一行从收纳包消失、在「更多」菜单里出现，少一次「先恢复、再右键收进更多」。
+   *
+   * @param row 收纳包里的一行。
+   */
+  function intoMore(row: StashItem): void {
+    store.update(function (next: PluginState) {
+      setIntoMore(next, row.scope, row.id, true);
     });
   }
 
@@ -330,7 +361,14 @@ function StashPanel(props: StashPanelProps): any {
       }
       for (j = 0; j < group.rows.length; j++) {
         (function (row: StashItem) {
-          body.push(h(StashRow, { key: row.key, row: row, onOpen: open, onRestore: restore }));
+          body.push(h(StashRow, {
+            key: row.key,
+            row: row,
+            onOpen: open,
+            onRestore: restore,
+            canIntoMore: moreScopeOk(row.scope),
+            onIntoMore: intoMore
+          }));
         })(group.rows[j]);
       }
     })(groups[i]);
@@ -584,14 +622,17 @@ function StashLauncher(props: StashLauncherProps): any {
     ref: ref,
     className: "lo-launcher",
     "data-dragging": dragRef.current ? "1" : undefined,
-    // 不要 `title`：原生 tooltip 会在拖动时弹出来挡在按钮上。
+    // 不要 `title`：原生 tooltip 会在拖动时弹出来挡在按钮上。名字交给 `aria-label`。
+    "aria-label": t("stash.launcher"),
     style: { left: Math.round(x) + "px", top: Math.round(y) + "px" },
     onPointerDown: onPointerDown,
     onPointerMove: onPointerMove,
     onPointerUp: onPointerUp,
     onPointerCancel: onPointerUp
   },
-    h("span", null, t("stash.launcher")),
+    // 启动器用本插件自己的图标做标识：它是这一处「已收纳的悬浮框」的唯一入口，
+    // 写成文字既占地方又和侧边栏里的按钮长得不一样。
+    h(Icon, { svg: ICON_SVG, className: "lo-launcher-ico", name: "layout" }),
     count > 0 ? h("span", { className: "lo-launcher-count" }, String(count)) : null
   );
 }

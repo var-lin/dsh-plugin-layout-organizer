@@ -26,12 +26,15 @@ const BUILD_ORDER = [
   "shared/icons.ts",
   "shared/locale.ts",
   "core/store.ts",
+  // 插件图标兜底：要 notifyRevision（store.ts），也要排在使用它的 dom-rows.ts 之前
   "core/dom-rows.ts",
   "core/dom-line.ts",
   "core/dom-menu.ts",
   "core/dom-project.ts",
   "core/dom-navigate.ts",
   "core/organizer.ts",
+  // 两个拖拽控制器共用的手势管线，排在它们之前
+  "drag/drag-frame.ts",
   "drag/drag-rows.ts",
   "drag/drag-list.ts",
   "ui/styles.ts",
@@ -42,6 +45,7 @@ const BUILD_ORDER = [
   "ui/shortcut-card.ts",
   "ui/settings-page.ts",
   "ui/stash.ts",
+  "ui/more-menu.ts",
   "main.ts"
 ];
 

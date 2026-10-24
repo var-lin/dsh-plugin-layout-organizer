@@ -58,6 +58,12 @@ interface BtnProps {
   icon?: string;
   // 图标的素材名（形如 "github"），样式表据它做光学校正，见 Icon。
   iconName?: string;
+  // 这是行内第几个动作（`kind` / `up` / `down` / `more` / `stash`）。样式表按它定列宽，
+  // 让每一行同一位置的那个按钮宽度一致——文案长短（官方 / 第三方）不该把整排推得左右参差。
+  act?: string;
+  // 这一行正因为它自己「已被移走」而变淡时，这颗按钮要不要保持醒目（见 RowItem）。
+  // 只在这颗按钮上写 data-lit，样式表据此把它的透明度拉回 1。
+  lit?: boolean;
   onClick?: (event: any) => void;
   children?: any;
 }
@@ -88,8 +94,92 @@ interface RowEntry {
   label: any;
 }
 
+/**
+ * 渲染期的兜底：某一处列表组件炸掉，不该把整页带走——宿主把未捕获的渲染错误当成页面
+ * 错误，整块界面就白了（用户报过一次「插件一启用，DSH 就打不开」）。
+ * 这里只吞本插件自己画的这几块：真炸了就让那一块显示成空，其余照旧。
+ *
+ * 类组件只能从 `React.Component` 上取；取不到（测试用的桩）时直接透传 children。
+ */
+let loBoundaryBase: any = null;
+
+function loBoundary(): any {
+  if (loBoundaryBase) return loBoundaryBase;
+  const Base: any = React && (React as any).Component ? (React as any).Component : null;
+  if (!Base) return null;
+  loBoundaryBase = class LOErrorBoundary extends Base {
+    constructor(props: any) {
+      super(props);
+      (this as any).state = { failed: false };
+    }
+
+    static getDerivedStateFromError(): any {
+      return { failed: true };
+    }
+
+    componentDidCatch(err: any): void {
+      warn("render failed; this panel stays empty: " + (err && err.message ? err.message : String(err)));
+    }
+
+    render(): any {
+      const self = this as any;
+      if (self.state && self.state.failed) return null;
+      return self.props ? self.props.children : null;
+    }
+  };
+  return loBoundaryBase;
+}
+
+/**
+ * 给一块界面套上兜底边界。
+ *
+ * @param props.children 被保护的内容。
+ * @returns 包好边界的元素；环境里没有 React 类组件时原样返回 children。
+ */
+function Boundary(props: { children?: any }): any {
+  const Base = loBoundary();
+  if (!Base) return props.children;
+  return h(Base, null, props.children);
+}
+
+/**
+ * 行首那颗图标。
+ *
+ * 原按钮自己画了图标就照搬（见 `rowIconOf`）；没画就用这一行的名字首字顶上——有个字母
+ * 总比空一格好认，也不需要去别处猜图标。两种情况都占同样宽的一格，整列名称的左边缘才齐。
+ *
+ * @param props.svg 原按钮里的 `<svg>` 源码，可为空。
+ * @param props.text 这一行的名字，取首字当图标用。
+ * @returns 图标元素。
+ */
+function RowIcon(props: { svg?: string; text?: string }): any {
+  if (props.svg) return h(Icon, { svg: props.svg, className: "lo-row-ico" });
+  return h("span", { className: "lo-row-ico lo-row-ico-text", "aria-hidden": "true" }, rowInitial(props.text));
+}
+
+/**
+ * 名字首字：用来顶替缺失的图标。
+ *
+ * 取第一个非空白字符并大写（拉丁字母），中文取第一个字。名字为空时回空串，那一格就空着。
+ *
+ * @param text 行名字。
+ * @returns 一个字符的图标文案。
+ */
+function rowInitial(text?: string): string {
+  const plain = (text || "").replace(/\s+/g, " ").trim();
+  if (!plain) return "";
+  const first = Array.from(plain)[0] || "";
+  return first.toUpperCase();
+}
+
 interface RowItemProps {
   entry: RowEntry;
+  // 这一行属于哪一处槽位：图标要按 scope + id 从原按钮上取（见 liveRowIcon）。
+  scope?: string;
+  // 图标不按 scope 取、由调用方直接给（宿主自己那两项动作行），给了就不再查 liveRowIcon。
+  icon?: { svg: string; src: string };
+  // id 一列显示的文案；缺省显示 `entry.id`。动作行的 id 带虚拟槽位前缀，列里只显示后半段。
+  idText?: string;
   group?: string;
   kind?: string;
   self?: boolean;
@@ -103,10 +193,17 @@ interface RowItemProps {
   openTitle?: string;
   onOpen?: () => void;
   onMenu?: (event: any) => void;
+  // 「官方 / 第三方」判断按钮：动作行固定算官方，没有可切的分支，传假就不画。
+  canToggleKind?: boolean;
   onToggleKind?: () => void;
   onUp?: () => void;
   onDown?: () => void;
+  // 收起 / 恢复按钮：动作行永远在「更多」里，没有收起这一说，传假就不画。
+  canStash?: boolean;
   onToggleHidden?: () => void;
+  // 这一行是否已收进官方「更多」菜单；只有能收进去的槽位才画这个按钮（见 moreScopeOk）。
+  intoMore?: boolean;
+  onToggleMore?: () => void;
 }
 
 function useStoreTick(store: StoreLike): number {
@@ -278,6 +375,8 @@ function Btn(props: BtnProps): any {
     className: "lo-btn",
     "data-variant": props.variant || undefined,
     "data-size": props.size || undefined,
+    "data-act": props.act || undefined,
+    "data-lit": props.lit ? "1" : undefined,
     "data-armed": props.armed ? "1" : undefined,
     disabled: props.disabled === true,
     title: props.title || undefined,
@@ -347,12 +446,16 @@ function ConfirmBtn(props: { label: string; confirmLabel: string; onConfirm: () 
 function RowItem(props: RowItemProps): any {
   const entry = props.entry;
   const canOpen = props.canOpen === true;
+  // 图标只认原按钮自己那颗；没有就用名字首字（见 RowIcon）。
+  const icon = rowIconOf(props.scope || "", entry.id);
   return h("div", {
     className: "lo-row",
     "data-lo-list-id": entry.id,
     "data-lo-list-group": props.group,
     "data-locked": props.draggable ? undefined : "1",
-    "data-hidden": props.hidden ? "1" : undefined,
+    // 收进「更多」的行和收进悬浮框的行一样退到背景里：两种「不在主列表」的状态
+    // 都该一眼看出来，别只让其中一种变淡（用户 m09249#1）。
+    "data-hidden": props.hidden || props.intoMore ? "1" : undefined,
     onContextMenu: props.onMenu
   },
     h("span", { className: "lo-grip", title: props.draggable ? t("action.drag") : undefined }, "\u22ee\u22ee"),
@@ -365,15 +468,31 @@ function RowItem(props: RowItemProps): any {
         if (canOpen && props.onOpen) props.onOpen();
       }
     },
-      h("span", { className: "lo-swatch", "data-kind": props.self ? "self" : props.kind }),
+      h(RowIcon, { svg: icon, text: entry.label }),
       h("span", { className: "lo-row-name", title: entry.label }, entry.label),
       h("span", { className: "lo-row-id" }, entry.id)
     ),
-    h(Btn, { onClick: props.onToggleKind, title: t("action.toggleKind") }, props.kind === "official" ? t("kind.official") : t("kind.third")),
-    h(Btn, { size: "icon", onClick: props.onUp, disabled: !props.canUp, title: t("action.up") }, "\u2191"),
-    h(Btn, { size: "icon", onClick: props.onDown, disabled: !props.canDown, title: t("action.down") }, "\u2193"),
-    h(Btn, {
-      variant: props.hidden ? "primary" : undefined,
+    props.canToggleKind === false ? null : h(Btn, { act: "kind", onClick: props.onToggleKind, title: t("action.toggleKind") }, props.kind === "official" ? t("kind.official") : t("kind.third")),
+    h(Btn, { act: "up", size: "icon", onClick: props.onUp, disabled: !props.canUp, title: t("action.up") }, "\u2191"),
+    h(Btn, { act: "down", size: "icon", onClick: props.onDown, disabled: !props.canDown, title: t("action.down") }, "\u2193"),
+    // 「进更多」排在「收起」之前：一级比一级退得更远，与右键菜单同一顺序（见 menuActionsFor）。
+    // 两个动作都不用实心底色：收起 / 恢复这一对原本就靠文字说清方向，多一块实心黑只会让
+    // 同一行的四个按钮看起来三六九等（用户图3 反馈）。
+    props.onToggleMore
+      ? h(Btn, {
+        act: "more",
+        // 这一行正因为「已进更多」而变淡时，这颗按钮不跟着淡——它是把它带回来的入口（用户 m09308#1）。
+        lit: props.intoMore,
+        variant: props.intoMore ? "soft" : undefined,
+        onClick: props.onToggleMore,
+        title: props.intoMore ? t("action.outOfMore") : t("action.intoMore")
+      }, props.intoMore ? t("action.outOfMore") : t("action.intoMore"))
+      : null,
+    props.canStash === false ? null : h(Btn, {
+      act: "stash",
+      // 同上：收进悬浮框的行，「恢复」这颗按钮保持醒目。
+      lit: props.hidden,
+      variant: props.hidden ? "soft" : undefined,
       onClick: props.onToggleHidden,
       title: props.hidden ? t("action.restore") : t("action.stash")
     }, props.hidden ? t("action.restore") : t("action.stash"))

@@ -14,8 +14,10 @@ function createListDragController(store: StoreHandle): { attach: () => void; det
   let insertAt = 0;
   // 垂直列表只看 Y。
   let lastPointer = 0;
-  // 待执行的重算帧；0 表示本帧没有排队的重算。
-  let rafId = 0;
+  // 一帧最多重算一次（规则在 drag-frame.ts）。
+  const throttle = createFrameThrottle(function (pointer: number): void {
+    if (active && draggedEl) applyAt(pointer);
+  });
 
   function rowFrom(target: EventTarget | null): HTMLElement | null {
     if (!target || !(target instanceof Element)) return null;
@@ -120,18 +122,11 @@ function createListDragController(store: StoreHandle): { attach: () => void; det
     if (!draggedEl) return;
     lastPointer = event.clientY;
     // 一帧最多重算一次，逐次测量会拖垮主线程。
-    if (rafId) return;
-    rafId = window.requestAnimationFrame(function () {
-      rafId = 0;
-      if (active && draggedEl) applyAt(lastPointer);
-    });
+    throttle.schedule(lastPointer);
   }
 
   function flushUpdate(): void {
-    if (!rafId) return;
-    window.cancelAnimationFrame(rafId);
-    rafId = 0;
-    if (active && draggedEl) applyAt(lastPointer);
+    throttle.flush();
   }
 
   function applyAt(pointer: number): void {
@@ -152,10 +147,7 @@ function createListDragController(store: StoreHandle): { attach: () => void; det
   }
 
   function cleanup(): void {
-    if (rafId) {
-      window.cancelAnimationFrame(rafId);
-      rafId = 0;
-    }
+    throttle.drop();
     if (draggedEl) draggedEl.removeAttribute("data-lo-dragging");
     document.documentElement.style.cursor = "";
     // 在最后一轮投影运行之前释放，好让已提交的顺序被画出来。
@@ -274,22 +266,25 @@ function createListDragController(store: StoreHandle): { attach: () => void; det
     if (active) refreshRects();
   }
 
+  let detachEvents: (() => void) | null = null;
+
   return {
     attach: function (): void {
-      document.addEventListener("pointerdown", onDown, true);
-      document.addEventListener("pointermove", onMove, true);
-      document.addEventListener("pointerup", onUp, true);
-      document.addEventListener("pointercancel", onCancel, true);
-      document.addEventListener("click", onClickCapture, true);
-      window.addEventListener("scroll", onScroll, true);
+      if (detachEvents) return;
+      detachEvents = bindDragEvents({
+        down: onDown,
+        move: onMove,
+        up: onUp,
+        cancel: onCancel,
+        click: onClickCapture,
+        scroll: onScroll,
+        resize: false
+      });
     },
     detach: function (): void {
-      document.removeEventListener("pointerdown", onDown, true);
-      document.removeEventListener("pointermove", onMove, true);
-      document.removeEventListener("pointerup", onUp, true);
-      document.removeEventListener("pointercancel", onCancel, true);
-      document.removeEventListener("click", onClickCapture, true);
-      window.removeEventListener("scroll", onScroll, true);
+      if (!detachEvents) return;
+      detachEvents();
+      detachEvents = null;
       cleanup();
     }
   };

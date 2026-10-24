@@ -27,27 +27,89 @@ function outletChildren(slotKey: string): HTMLElement[] | null {
 }
 
 /**
- * 行按钮是侧边栏出口的祖先：closest 从每个出口往上走到 nav.panelList 里真正的 flex 子项。
+ * 侧边栏的行单元：面板行来自出口反查，其余从列表容器的直接子元素里认。
  *
- * @returns 收上来的行按钮；一个都没找到时返回 null。
+ * 面板行按钮是出口的祖先，closest 从每个出口往上走到 nav.panelList 里真正的 flex 子项。
+ * 「更多」不是 slot 记录：官方把它的菜单按钮包进一个 `moreAnchor` 包裹层，那层才是列表的 flex 子项，
+ * 于是按出口反查、按「直接子按钮」直取都碰不到它——只能认包裹层里那个带 `aria-haspopup` 的按钮，
+ * 并给它一个合成 id（见 `SYNTHETIC_IDS`），让它和台账行一样参与排序、隐藏与配对。
+ *
+ * @returns 收上来的行单元（合成行带 id，slot 行 id 为 null）；一个都没找到时返回 null。
  */
-function collectSidebarRows(): HTMLElement[] | null {
-  const rows: HTMLElement[] = [];
+function collectSidebarUnits(): RowUnit[] | null {
+  const units: RowUnit[] = [];
+  // 面板行：出口在按钮内部，从出口往上走回行按钮。
+  const panelRows: HTMLElement[] = [];
   const outlets = document.querySelectorAll('[data-slot="sidebar.panellist"]');
   for (let i = 0; i < outlets.length; i++) {
-    const row = (outlets[i] as HTMLElement).closest("button");
-    if (row && rows.indexOf(row as HTMLElement) < 0) rows.push(row as HTMLElement);
+    const row = (outlets[i] as HTMLElement).closest("button") as HTMLElement | null;
+    if (row && panelRows.indexOf(row) < 0) panelRows.push(row);
   }
-  // 面板列表上方那一条（workspace / 新建会话 / 搜索）不属于 panellist slot；能认出列表容器时从容器里收上来。
   const list = document.querySelector("nav[class*='panelList'], [class*='panelList']") as HTMLElement | null;
   if (list) {
-    const buttons = list.querySelectorAll(":scope > button, :scope > a");
-    for (let i = 0; i < buttons.length; i++) {
-      const btn = buttons[i] as HTMLElement;
-      if (rows.indexOf(btn) < 0) rows.push(btn);
+    // 按容器里的先后收，行的顺序才和屏幕上一致；合成 id 只发给真正认出来的合成行。
+    const synthetic = SYNTHETIC_IDS.sidebar || [];
+    const kids = elementChildren(list);
+    let next = 0;
+    for (let i = 0; i < kids.length; i++) {
+      const kid = kids[i];
+      // 「更多」的包裹层：里面是带 aria-haspopup 的菜单按钮，这一处槽位才挂可展开菜单。
+      // 面板行自己也可能带弹出菜单，能认到 panellist 出口的那一行就不算「更多」。
+      const slotOutlet = kid.querySelector('[data-slot="sidebar.panellist"]');
+      const moreButton = slotOutlet ? null : kid.querySelector("[aria-haspopup='menu']");
+      if (moreButton || String(kid.className || "").indexOf("moreAnchor") >= 0) {
+        units.push({ el: kid, id: synthetic[next] !== undefined ? synthetic[next] : "sidebar-" + next });
+        next++;
+        continue;
+      }
+      if (kid.tagName === "BUTTON" || kid.tagName === "A") {
+        units.push({ el: kid, id: null });
+        continue;
+      }
+      // 官方改版给面板行套壳时，认得出里面的面板行就按包裹层算一行，不至于整条掉出去。
+      const inner = kid.querySelector("button") as HTMLElement | null;
+      if (inner && panelRows.indexOf(inner) >= 0) units.push({ el: kid, id: null });
+    }
+    // 出口反查到的面板行不在这个容器里时（宿主把某几行挪出列表），补在列表行之后：
+    // 少列一行就等于那一行从插件里消失，宁可多收也不要漏收。
+    for (let i = 0; i < panelRows.length; i++) {
+      let seen = false;
+      for (let j = 0; j < units.length; j++) {
+        if (units[j].el === panelRows[i] || units[j].el.contains(panelRows[i])) {
+          seen = true;
+          break;
+        }
+      }
+      if (!seen) units.push({ el: panelRows[i], id: null });
     }
   }
-  return rows.length > 0 ? rows : null;
+  // 列表容器没认出来时退回只收出口反查到的面板行（老宿主没有 nav.panelList 也能用）。
+  if (units.length === 0) {
+    for (let i = 0; i < panelRows.length; i++) units.push({ el: panelRows[i], id: null });
+  }
+  return units.length > 0 ? units : null;
+}
+
+/**
+ * 一组 `RowUnit` 里的行元素（丢掉合成 id）。
+ *
+ * @param units 收上来的行；null 表示这一处没挂载。
+ * @returns 行元素；入参是 null 时同样是 null，好让调用方一路透传「没挂载」。
+ */
+function unitElements(units: RowUnit[] | null): HTMLElement[] | null {
+  if (!units) return null;
+  const rows: HTMLElement[] = [];
+  for (let i = 0; i < units.length; i++) rows.push(units[i].el);
+  return rows;
+}
+
+/**
+ * 侧边栏的行元素（`collectSidebarUnits` 去掉合成 id）。
+ *
+ * @returns 收上来的行元素；一个都没找到时返回 null。
+ */
+function collectSidebarRows(): HTMLElement[] | null {
+  return unitElements(collectSidebarUnits());
 }
 
 function settingsPanel(): HTMLElement | null {
@@ -159,15 +221,12 @@ function collectComposerUnits(): RowUnit[] | null {
 }
 
 function collectComposerRows(): HTMLElement[] | null {
-  const units = collectComposerUnits();
-  if (!units) return null;
-  const rows: HTMLElement[] = [];
-  for (let i = 0; i < units.length; i++) rows.push(units[i].el);
-  return rows;
+  return unitElements(collectComposerUnits());
 }
 
 function collectRowUnits(scope: string): RowUnit[] | null {
   if (scope === "composer") return collectComposerUnits();
+  if (scope === "sidebar") return collectSidebarUnits();
   const rows = collectRows(scope);
   if (!rows) return null;
   const units: RowUnit[] = [];
@@ -457,6 +516,95 @@ function liveRowLabel(scope: string, id: string): string {
   if (!rows) return "";
   for (let i = 0; i < rows.length; i++) if (rows[i].id === id) return rows[i].label;
   return "";
+}
+
+/**
+ * 一行的显示名：插件指定的名字 → 台账文案 → 投影记下的名字（钩子文案或界面文字）→ id。
+ *
+ * 悬浮框与「更多」菜单都从这里取名字。两处各写各的取法，同一个按钮就会换个地方换个人名
+ * ——宿主 DOM 上写的是英文，台账里写的是中文（用户 m09308：同一个 Agent 预设，
+ * 一处叫「Agent 预设」，另一处叫宿主的英文名）。
+ *
+ * @param ctx 上下文，用来读台账。
+ * @param scope 槽位 key。
+ * @param id 行 id。
+ * @returns 该行的显示名。
+ */
+function rowLabelText(ctx: CtxLike, scope: string, id: string): string {
+  const own = rowLabelOf(scope, id);
+  if (own) return own;
+  const entries = readEntries(ctx, scope);
+  let entry: LedgerEntry | null = null;
+  for (let i = 0; i < entries.length; i++) if (entries[i].id === id) entry = entries[i];
+  if (entry && entry.hasLabel) return entry.label;
+  return liveRowLabel(scope, id) || hookLabel(scope, id) || (entry ? entry.label : "") || id;
+}
+
+/**
+ * 见过的行图标：`scope:id -> <svg> 源码`。
+ *
+ * 行不在屏幕上时（被收进「更多」的行在主列表里让位、设置页的行只有弹窗打开时才挂载），
+ * DOM 里根本找不到原按钮，`liveRowIcon` 会返回空——同一行于是时而图标、时而字母块。
+ * 见过的就记下来，离屏时用记下的那份，图标这一列才不会随开合跳来跳去。
+ */
+const loRowIcons: Record<string, string> = {};
+
+/**
+ * 取某条屏幕上的行原按钮里的图标（内联 SVG 源码）。
+ *
+ * 「更多」里的行要比照原按钮的样子：原按钮有图标就照搬。行已经离屏时用之前记下的那份
+ * （见 `loRowIcons`）；从没见过才回空，交给调用方画名字首字。
+ *
+ * @param scope scope 键。
+ * @param id 行 id。
+ * @returns 归一化后的 `<svg>` 源码；没见过、或原按钮本来就没有图标时返回空字符串。
+ */
+function liveRowIcon(scope: string, id: string): string {
+  const key = scope + ":" + id;
+  const nodes = document.querySelectorAll("[" + MARKS.scope + '="' + scope + '"][' + MARKS.id + "]");
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i] as HTMLElement;
+    if (node.getAttribute(MARKS.id) !== id) continue;
+    const svg = node.querySelector("svg");
+    const html = svg ? svg.outerHTML : "";
+    // 空字符串也记：说明原按钮确实没有图标，下次离屏时不必再去猜。
+    if (html) loRowIcons[key] = html;
+    return html || loRowIcons[key] || "";
+  }
+  return loRowIcons[key] || "";
+}
+
+/**
+ * 行首那一格该画什么：照搬原按钮自己的图标。
+ *
+ * 原按钮没画图标（停靠行、标签页那几颗只有文字的）就回空串，交给调用方画名字首字——不画
+ * 色点、不去别处找图标：拿不准的图标比一个字母更容易认错行。
+ *
+ * @param scope scope 键。
+ * @param id 行 id。
+ * @returns 内联 `<svg>` 源码；原按钮没有图标时返回空字符串。
+ */
+function rowIconOf(scope: string, id: string): string {
+  return scope ? liveRowIcon(scope, id) : "";
+}
+
+/**
+ * 投影时顺手把这一行的图标记下来。
+ *
+ * 等「更多」菜单要画这一行时，原按钮可能已经离屏（收进去的行在主列表里让位），那时
+ * `liveRowIcon` 只能吃缓存。投影每轮都看得见每一行，在这里记最省事也最及时。
+ *
+ * @param scope scope 键。
+ * @param id 行 id。
+ * @param el 这一行（可能是一组元素里的第一个）。
+ */
+function rememberRowIcon(scope: string, id: string, el: HTMLElement | null): void {
+  if (!el || !id) return;
+  const svg = el.querySelector("svg");
+  if (!svg) return;
+  const key = scope + ":" + id;
+  // 只升级、不降级：有的行会把图标换成文字，别把记下的那份冲掉。
+  if (!loRowIcons[key]) loRowIcons[key] = svg.outerHTML;
 }
 
 /**

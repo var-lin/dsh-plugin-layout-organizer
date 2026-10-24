@@ -144,8 +144,10 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
   let suppressClickUntil = 0;
   // 指针在当前轴上的最近一次坐标。滚动时指针没动、矩形全变了，预览要拿它重算一次。
   let lastPointer = 0;
-  // 待执行的重算帧；0 表示本帧没有排队的重算。
-  let rafId = 0;
+  // 一帧最多重算一次（规则在 drag-frame.ts）。
+  const throttle = createFrameThrottle(function (pointer: number): void {
+    if (active && draggedEl) applyAt(pointer);
+  });
 
   /**
    * 找可拖行的三级兜底：closest → elementsFromPoint → 几何硬扫；pointer-events:none 的条带只有硬扫够得到。
@@ -227,21 +229,14 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
     if (!draggedEl) return;
     lastPointer = axis === "x" ? event.clientX : event.clientY;
     // 一帧最多重算一次，逐次测量会拖垮主线程。
-    if (rafId) return;
-    rafId = window.requestAnimationFrame(function () {
-      rafId = 0;
-      if (active && draggedEl) applyAt(lastPointer);
-    });
+    throttle.schedule(lastPointer);
   }
 
   /**
    * 松手提交前把积压的那一帧补掉，`finish` 才拿得到最新算出的预览序列。
    */
   function flushUpdate(): void {
-    if (!rafId) return;
-    window.cancelAnimationFrame(rafId);
-    rafId = 0;
-    if (active && draggedEl) applyAt(lastPointer);
+    throttle.flush();
   }
 
   /**
@@ -315,10 +310,7 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
   }
 
   function cleanup(): void {
-    if (rafId) {
-      window.cancelAnimationFrame(rafId);
-      rafId = 0;
-    }
+    throttle.drop();
     if (draggedEl) {
       draggedEl.removeAttribute(MARKS.dragging);
       // 收手时擦掉可能残留的落点标记。
@@ -397,24 +389,25 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
     }
   }
 
+  let detachEvents: (() => void) | null = null;
+
   return {
     attach: function (): void {
-      document.addEventListener("pointerdown", onDown, true);
-      document.addEventListener("pointermove", onMove, true);
-      document.addEventListener("pointerup", onUp, true);
-      document.addEventListener("pointercancel", onCancel, true);
-      document.addEventListener("click", onClickCapture, true);
-      window.addEventListener("scroll", onScroll, true);
-      window.addEventListener("resize", onScroll, true);
+      if (detachEvents) return;
+      detachEvents = bindDragEvents({
+        down: onDown,
+        move: onMove,
+        up: onUp,
+        cancel: onCancel,
+        click: onClickCapture,
+        scroll: onScroll,
+        resize: true
+      });
     },
     detach: function (): void {
-      document.removeEventListener("pointerdown", onDown, true);
-      document.removeEventListener("pointermove", onMove, true);
-      document.removeEventListener("pointerup", onUp, true);
-      document.removeEventListener("pointercancel", onCancel, true);
-      document.removeEventListener("click", onClickCapture, true);
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onScroll, true);
+      if (!detachEvents) return;
+      detachEvents();
+      detachEvents = null;
       cleanup();
     }
   };

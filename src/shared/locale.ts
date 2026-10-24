@@ -5,7 +5,7 @@ const ZH: Record<string, string> = {
   "version.hint": "当前插件版本",
 
   "section.options": "通用设置",
-  "section.stash": "按钮收纳包",
+  "section.stash": "悬浮框",
   "section.shortcut": "快捷键",
 
   "tab.general": "通用设置",
@@ -33,9 +33,11 @@ const ZH: Record<string, string> = {
   "opt.divider.settings": "显示设置页侧边栏按钮分隔线",
   "opt.divider.settings.hint": "只影响设置页侧边栏按钮这一组，其余位置不受影响。",
   "opt.showLauncher": "显示悬浮按钮",
-  "opt.showLauncher.hint": "关闭后只能用快捷键或本页按钮打开按钮收纳包。",
-
-  "launcher.hint": "悬浮按钮可以按住拖动，会自动吸附到屏幕左边缘或右边缘，上下位置随你放。",
+  "opt.showLauncher.hint": "关闭后只能用快捷键或本页按钮打开悬浮框。",
+  "opt.separateMore": "分开收纳",
+  "opt.separateMore.hint": "打开后侧边栏的按钮（含侧边栏底部按钮）只收进侧边栏的「更多」，对话区的按钮只收进对话的「更多」；关闭时两处共用一份清单，收进哪一处都在两处出现。",
+  "opt.moreDivider": "在「更多」菜单里画分隔线",
+  "opt.moreDivider.hint": "只在「更多」菜单里生效：官方按钮排前面、第三方按钮排后面，中间画一条线。与下面的总开关各管各的。",
 
   "sort.scope": "按页面",
   "sort.kind": "按分类",
@@ -43,24 +45,31 @@ const ZH: Record<string, string> = {
 
   "kind.official": "官方",
   "kind.third": "第三方",
-  "group.count": "{count} 个",
   "action.toggleGroup": "折叠 / 展开这一组",
 
   // 宿主没给文案的几条记录由插件补名字（见 ROW_LABELS）：按功能命名，不是把 id 直译成中文。
   "row.activity": "会话统计",
   "row.usage": "用量统计",
   "row.context-meter": "上下文用量",
+  "row.more": "更多",
 
   "action.toggleKind": "切换官方 / 第三方分类",
-  "action.stash": "收纳",
+  // 三个收纳动作的文案都压到两三个字：按钮排在同一行上，字数一多就被定宽列截成省略号，
+  // 看不出「往哪一级收」。方向靠图标区分（归档盘往里收、方框箭头往外取），完整说法进悬停提示。
+  "action.stash": "收起",
   "action.restore": "恢复",
+  "action.intoMore": "进更多",
+  "action.outOfMore": "出更多",
+  "action.intoMore.hint": "从主列表移到「更多」菜单里，仍然可以从那里打开",
+  // 宿主「更多」菜单里那两项的兜底文案与提示词。文案在接管时直接读宿主渲染的那一份，
+  // 只有读不到（宿主改过结构）才用这里的；提示词按菜单归属分两套，与宿主自己发的一致。
   "action.up": "上移",
   "action.down": "下移",
   "action.left": "左移",
   "action.right": "右移",
   "action.reset": "恢复本组默认顺序",
   "action.restoreAll": "全部恢复",
-  "action.openStash": "打开按钮收纳包",
+  "action.openStash": "打开已收起的按钮",
   "action.close": "关闭",
   "action.goto": "打开对应页面",
   "action.static": "这一行只是显示，没有可以打开的页面",
@@ -75,7 +84,6 @@ const ZH: Record<string, string> = {
   "action.feedback.hint": "在 GitHub Issues 里报告问题或提建议",
   "action.resetAll": "重置所有配置",
   "action.resetAll.hint": "清空顺序、分类、收纳与全部开关，恢复到初次安装的状态。",
-  "action.confirm": "再点一次确认",
   "action.confirmRestore": "再点一次恢复",
   "action.confirmResetGroup": "再点一次恢复本组",
   "action.confirmResetAll": "再点一次重置",
@@ -85,15 +93,15 @@ const ZH: Record<string, string> = {
   "note.importOk": "导入成功，配置已更新。",
   "note.importFail": "导入失败：这不是本插件导出的配置文件。",
 
-  "empty.stash": "按钮收纳包里还没有内容。在任意按钮上右键，选择「收纳」即可放进来。",
+  "empty.stash": "悬浮框里还没有内容。在任意按钮上右键，选择「收纳」即可放进来。",
   "empty.list": "这里还没有按钮。",
   "empty.search": "没有匹配的按钮。清空搜索框即可看到全部。",
 
-  "stash.title": "按钮收纳包",
-  "stash.launcher": "按钮收纳包",
+  "stash.title": "已收起的按钮",
+  "stash.launcher": "已收起的按钮",
   "stash.count": "共 {count} 个按钮",
 
-  "shortcut.open": "打开按钮收纳包",
+  "shortcut.open": "打开已收起的按钮",
   "shortcut.none": "未设置",
   "shortcut.record": "点击后按下新的组合键",
   "shortcut.recording": "请按下组合键…",
@@ -104,8 +112,7 @@ const ZH: Record<string, string> = {
   "shortcut.failed": "保存失败（{status}），快捷键未改动。",
   "shortcut.hint": "快捷键同样可以在 DSH 的「快捷键」设置里修改。",
 
-  "note.hideOnly": "收纳只影响显示，随时可以在按钮收纳包里恢复。",
-  "note.drag": "拖动按钮可调整顺序，右键按钮可收纳或微调位置。",
+  "note.hideOnly": "收纳只影响显示，随时可以在悬浮框里恢复。",
   "note.degrade": "部分能力不可用，已自动降级：",
 
   "nav.failed": "无法打开「{label}」，该按钮可能已不可用。"
@@ -118,7 +125,7 @@ const EN: Record<string, string> = {
   "version.hint": "Installed plugin version",
 
   "section.options": "General",
-  "section.stash": "Button stash",
+  "section.stash": "Floating frame",
   "section.shortcut": "Shortcut",
 
   "tab.general": "General",
@@ -146,9 +153,11 @@ const EN: Record<string, string> = {
   "opt.divider.settings": "Divider for Settings navigation buttons",
   "opt.divider.settings.hint": "Applies only to the Settings navigation button group; other locations are unaffected.",
   "opt.showLauncher": "Show the floating button",
-  "opt.showLauncher.hint": "When off, only the shortcut or this page can open the stash.",
-
-  "launcher.hint": "The floating button can be dragged. It snaps to the left or right edge and keeps the vertical position you choose.",
+  "opt.showLauncher.hint": "When off, only the shortcut or this page can open the floating frame.",
+  "opt.separateMore": "Keep the two More menus apart",
+  "opt.separateMore.hint": "When on, sidebar buttons (including the sidebar footer) only go into the sidebar More, and conversation buttons only into the conversation More. When off, both menus share one list, so anything tucked in shows up in both.",
+  "opt.moreDivider": "Draw the divider inside the More menu",
+  "opt.moreDivider.hint": "Applies to the More menu only: official buttons come first, third-party buttons after, with a line between them. It works independently of the master switch below.",
 
   "sort.scope": "By page",
   "sort.kind": "By kind",
@@ -156,23 +165,26 @@ const EN: Record<string, string> = {
 
   "kind.official": "Official",
   "kind.third": "Third-party",
-  "group.count": "{count}",
   "action.toggleGroup": "Collapse / expand this group",
 
   "row.activity": "Session stats",
   "row.usage": "Token usage",
   "row.context-meter": "Context usage",
+  "row.more": "More",
 
   "action.toggleKind": "Toggle official / third-party",
-  "action.stash": "Stash",
+  "action.stash": "Tuck",
   "action.restore": "Restore",
+  "action.intoMore": "Into more",
+  "action.outOfMore": "Out of more",
+  "action.intoMore.hint": "Move it out of the main list and into the More menu, where it stays reachable",
   "action.up": "Move up",
   "action.down": "Move down",
   "action.left": "Move left",
   "action.right": "Move right",
   "action.reset": "Reset this group's order",
   "action.restoreAll": "Restore all",
-  "action.openStash": "Open the button stash",
+  "action.openStash": "Open the tucked-away buttons",
   "action.close": "Close",
   "action.goto": "Open the matching page",
   "action.static": "This row is display-only and has no page to open",
@@ -187,7 +199,6 @@ const EN: Record<string, string> = {
   "action.feedback.hint": "Report a problem or suggest an idea on GitHub Issues",
   "action.resetAll": "Reset every setting",
   "action.resetAll.hint": "Clears ordering, kinds, stashed rows and every switch back to a fresh install.",
-  "action.confirm": "Click again to confirm",
   "action.confirmRestore": "Click again to restore",
   "action.confirmResetGroup": "Click again to reset",
   "action.confirmResetAll": "Click again to reset",
@@ -197,15 +208,15 @@ const EN: Record<string, string> = {
   "note.importOk": "Imported; the configuration is updated.",
   "note.importFail": "Import failed: that is not a configuration file exported by this plugin.",
 
-  "empty.stash": "The button stash is empty. Right-click any button and choose Stash to put it here.",
+  "empty.stash": "The floating frame is empty. Right-click any button and choose Stash to put it here.",
   "empty.list": "No buttons here yet.",
   "empty.search": "No matching buttons. Clear the search box to see everything.",
 
-  "stash.title": "Button stash",
-  "stash.launcher": "Button stash",
+  "stash.title": "Tucked-away buttons",
+  "stash.launcher": "Tucked-away buttons",
   "stash.count": "{count} buttons",
 
-  "shortcut.open": "Open the button stash",
+  "shortcut.open": "Open the tucked-away buttons",
   "shortcut.none": "Not set",
   "shortcut.record": "Click, then press the new combination",
   "shortcut.recording": "Press a combination…",
@@ -216,8 +227,7 @@ const EN: Record<string, string> = {
   "shortcut.failed": "Could not save ({status}); the shortcut is unchanged.",
   "shortcut.hint": "The shortcut can also be changed in the DSH Shortcuts settings.",
 
-  "note.hideOnly": "Stashing affects display only; restore it from the button stash at any time.",
-  "note.drag": "Drag a button to reorder it, or right-click it to stash or nudge it.",
+  "note.hideOnly": "Stashing affects display only; restore it from the floating frame at any time.",
   "note.degrade": "Some capabilities are unavailable; running degraded:",
 
   "nav.failed": "Could not open “{label}”; that button may no longer be available."

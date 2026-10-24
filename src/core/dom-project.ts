@@ -207,8 +207,17 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): ScopeResul
     el.setAttribute(MARKS.scope, scope);
     el.setAttribute(MARKS.id, id);
     el.setAttribute(MARKS.kind, kind);
+    // 趁这一行在屏幕上，把它的图标记下来：「更多」菜单要靠它还原原按钮的样子，
+    // 而收进去 / 收起的行在菜单打开时多半已经离屏（见 rememberRowIcon）。
+    rememberRowIcon(scope, id, el);
     if (group === "third" || canDragOfficial) el.setAttribute(MARKS.drag, "1");
     if (isHidden(state, scope, id)) {
+      el.setAttribute(MARKS.hidden, "1");
+      continue;
+    }
+    // 收进官方「更多」菜单的行同样从主列表让位：视觉上就是「不见了」，但入口挪到了「更多」里，
+    // 因此仍留在 live 记录中（设置页列得到、收纳包不会误收）。
+    if (moreScopeOk(scope) && isIntoMore(state, scope, id)) {
       el.setAttribute(MARKS.hidden, "1");
       continue;
     }

@@ -175,6 +175,34 @@ function SettingsPage(props: SettingsPageProps): any {
           }
         })
       }),
+      // 两处「更多」的分工。与上面那些开关各管各的：它只决定收进去的行归哪一处列出来。
+      h(Field, {
+        label: t("opt.separateMore"),
+        hint: t("opt.separateMore.hint"),
+        children: h(Switch, {
+          checked: state.options.separateMore === true,
+          label: t("opt.separateMore"),
+          onChange: function (value: boolean) {
+            store.update(function (next: PluginState) {
+              setOption(next, "separateMore", value);
+            });
+          }
+        })
+      }),
+      // 「更多」菜单自己的分隔线：页面上的那条线由 showDivider 管，菜单里这条单独一道。
+      h(Field, {
+        label: t("opt.moreDivider"),
+        hint: t("opt.moreDivider.hint"),
+        children: h(Switch, {
+          checked: state.options.moreDivider === true,
+          label: t("opt.moreDivider"),
+          onChange: function (value: boolean) {
+            store.update(function (next: PluginState) {
+              setOption(next, "moreDivider", value);
+            });
+          }
+        })
+      }),
       // 全局重置：两步确认，误触不生效。状态还是出厂值时按钮灰着——按下去什么也不会变。
       h(Field, {
         label: t("action.resetAll"),
@@ -189,6 +217,7 @@ function SettingsPage(props: SettingsPageProps): any {
               next.order = fresh.order;
               next.kinds = fresh.kinds;
               next.hidden = fresh.hidden;
+              next.intoMore = fresh.intoMore;
               next.options = fresh.options;
             });
           }

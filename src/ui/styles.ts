@@ -6,6 +6,10 @@ const CSS_TEXT: string[] = [
   "[data-lo-draggable='1']:active{cursor:grabbing}",
   "[data-lo-dragging='1']{cursor:grabbing;opacity:.45}",
   "[data-lo-hidden='1']{display:none !important}",
+  // 淡下去的是这一行，但「带它回来的那个入口」不跟着淡：进更多的行，「更多」那颗按钮照常醒目；
+  // 进悬浮框的行，「恢复」那颗照常醒目（用户 m09308#1）。
+  ".lo-row[data-hidden='1']>*{opacity:.5}",
+  ".lo-row[data-hidden='1']>[data-lit='1']{opacity:1}",
 
   // 官方块与第三方块之间的分割线：同为 body 级元素，按 scope 各存一份。
   ".lo-divider{background:var(--dsw-alias-border-l2);border-radius:2px}",
@@ -183,6 +187,11 @@ const CSS_TEXT: string[] = [
   // 主按钮悬停保持自己的配色
   ".lo-btn[data-variant='primary']:hover:not(:disabled){background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-inverted,#fff);filter:brightness(1.08)}",
   ".lo-btn[data-variant='ghost']{border-color:transparent}",
+  // 中性底色的一档：给「出更多 / 恢复」这类「往回退」的动作。原先一个用实心黑（brand
+  // primary）、另一个只留描边，同一行里看着像两个不同等级的动作（用户图3 反馈），
+  // 现在两者共用这一块灰底，谁也不会比谁更「重」。
+  ".lo-btn[data-variant='soft']{background:var(--dsw-alias-bg-layer-2);border-color:var(--dsw-alias-border-l1)}",
+  ".lo-btn[data-variant='soft']:hover:not(:disabled){background:var(--dsw-alias-bg-layer-1)}",
   ".lo-btn[data-size='icon']{width:28px;padding:0;font-size:13px}",
   // 两步确认的已上膛态：换成警示色，明确「这一下会真的执行」。
   ".lo-btn[data-armed='1']{border-color:var(--dsw-alias-state-warn-primary);color:var(--dsw-alias-state-warn-primary)}",
@@ -193,22 +202,22 @@ const CSS_TEXT: string[] = [
   ".lo-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:9px;-webkit-user-select:none;user-select:none;transition:background .12s ease}",
   ".lo-row *{-webkit-user-select:none;user-select:none}",
   ".lo-row:hover{background:var(--dsw-alias-bg-layer-2)}",
-  ".lo-row[data-hidden='1']{opacity:.5}",
   ".lo-row[data-dragging='1']{opacity:.4}",
   // 落点提示复用正文那两条虚线，不在行上画 box-shadow。
   ".lo-row[data-lo-dragging='1']{cursor:grabbing}",
   ".lo-grip{flex:0 0 auto;width:14px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:11px;line-height:1;letter-spacing:-1px;cursor:grab}",
   ".lo-grip[data-locked='1']{opacity:.28;cursor:default}",
   // 名称区是一块可点区域：吃掉行内剩余宽度，点它跳转到这个按钮对应的页面（与收纳包同一行为）。
-  ".lo-row-open{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:8px;padding:0;border:0;border-radius:7px;background:transparent;font:inherit;text-align:left;cursor:pointer}",
+  ".lo-row-open{flex:1 1 0;min-width:0;overflow:hidden;display:flex;align-items:center;gap:8px;padding:0;border:0;border-radius:7px;background:transparent;font:inherit;text-align:left;cursor:pointer}",
   ".lo-row-open:hover .lo-row-name{color:var(--dsw-alias-brand-primary)}",
   ".lo-row-open:disabled{cursor:default}",
   ".lo-row-open:disabled:hover .lo-row-name{color:var(--dsw-alias-label-primary)}",
   ".lo-row-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--dsw-alias-label-primary)}",
   ".lo-row-id{flex:0 0 auto;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-secondary)}",
-  ".lo-swatch{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-label-secondary)}",
-  ".lo-swatch[data-kind='official']{background:var(--dsw-alias-brand-primary)}",
-  ".lo-swatch[data-kind='third']{background:var(--dsw-alias-state-warn-primary)}",
+  // 行首图标固定 16px 见方：画 svg 还是画名字首字，后面文字的左边缘都在同一个位置。
+  ".lo-row-ico{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;overflow:hidden;border-radius:4px;color:var(--dsw-alias-label-secondary)}",
+  ".lo-row-ico>svg{width:16px;height:16px}",
+  ".lo-row-ico-text{background:var(--dsw-alias-interactive-bg-hover,#2631480f);font-size:10px;font-weight:600}",
   ".lo-groupbar{display:flex;align-items:center;gap:8px;padding:9px 8px 3px;font-size:11px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}",
   ".lo-groupbar::after{content:'';flex:1 1 auto;height:1px;background:var(--dsw-alias-border-l1)}",
   ".lo-note{padding:8px 14px;font-size:12px;line-height:1.6;color:var(--dsw-alias-label-secondary)}",
@@ -227,6 +236,30 @@ const CSS_TEXT: string[] = [
   ".lo-shortcut-msg[data-tone='error']{color:var(--dsw-alias-state-error-primary)}",
   ".lo-shortcut-msg[data-tone='warn']{color:var(--dsw-alias-state-warn-primary)}",
   ".lo-shortcut-msg[data-tone='ok']{color:var(--dsw-alias-state-success-primary)}",
+
+  // 行内的动作按钮按「第几列」定宽：文案长短（官方 / 第三方、进更多 / 出更多）
+  // 不该把后面几列推得左右参差。列宽集中写在这里，改一处全表对齐。
+  // 宽度按两种语言里最长的那条文案留（「第三方」/ Third-party / 「进更多」+图标），
+  // 装不下时省略号兜底；两个图标列（↑ / ↓）用 .lo-btn[data-size='icon'] 自己的 28px。
+  ".lo-row>.lo-btn[data-act='kind']{flex:0 0 auto;width:84px;padding:0 6px;overflow:hidden;text-overflow:ellipsis}",
+  ".lo-row>.lo-btn[data-act='more']{flex:0 0 auto;width:96px;padding:0 8px;overflow:hidden;text-overflow:ellipsis}",
+  ".lo-row>.lo-btn[data-act='stash']{flex:0 0 auto;width:64px;padding:0 8px;overflow:hidden;text-overflow:ellipsis}",
+
+  // 「更多」菜单里本插件收进来的行。宿主那两条菜单项是本插件插不进去的 JSX，只能让这一侧
+  // 对齐到它们：同一套盒模型（30px 高、4px 8px 内边距、6px 间隔、13px/20px 字），
+  // 图标槽固定 16 见方——原按钮没有图标时也留位，文字的左边缘才不会跳。
+  // 行高是量出来的：宿主菜单两条之间正好 30px，不是 CSS 里那个 34px 的初值。
+  ".lo-more-row{display:flex;width:100%;align-items:center;gap:6px;min-height:30px;margin:0;padding:4px 8px;border:0;border-radius:var(--dsw-radius-md,12px);background:transparent;color:inherit;font:inherit;font-size:13px;line-height:20px;text-align:left;cursor:pointer}",
+  ".lo-more-row:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f)}",
+  ".lo-more-row:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}",
+  ".lo-more-dragging{opacity:.6}",
+  ".lo-more-text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  // 菜单里不显示 id：宿主菜单本来就窄，一行里塞下 id 会把名称挤没。
+  ".lo-more-row .lo-row-id{display:none}",
+  // 官方块与第三方块之间那条线，与页面上的 .lo-divider 是两回事，由「更多」菜单自己的开关控制。
+  ".lo-more-divider{height:1px;margin:4px 6px;background:var(--dsw-alias-border-l1)}",
+  // 启动器图标：与侧边栏里的按钮同一套画布，14 见方；靠 currentColor 吃按钮的前景色。
+  ".lo-launcher-ico{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px}",
 
   "@keyframes lo-fade{from{opacity:0}to{opacity:1}}",
   "@keyframes lo-rise{from{opacity:0;transform:translate(-50%,-46%)}to{opacity:1;transform:translate(-50%,-50%)}}"

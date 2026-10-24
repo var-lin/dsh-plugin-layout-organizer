@@ -6,6 +6,22 @@ function closeMenu(): void {
   loMenuEl = null;
 }
 
+// 本插件的右键菜单是 portal 到 `body` 的，结构上在宿主「更多」菜单之外。宿主给那个菜单挂了
+// 「按下别处就关掉」的判断，于是点右键菜单里的任何一项都会被当成「点了外面」——「更多」菜单
+// 当场消失，动作还没跑完界面就没了。所以弹层自己把冒泡截住，事件到不了 document。
+//
+// 只能截冒泡阶段：捕获阶段截在弹层这一层，事件就再也到不了它下面的菜单项，点了没反应
+// （1.2.4 的实测翻车点）。冒泡阶段截则相反——目标先拿到事件、菜单项的点击照常执行，
+// 之后才轮到 document / window，宿主那一侧照样看不见这次按下。
+function guardPopEvents(menu: HTMLElement): void {
+  const names: string[] = ["pointerdown", "mousedown", "pointerup", "mouseup", "click", "contextmenu"];
+  for (let i = 0; i < names.length; i++) {
+    menu.addEventListener(names[i], function (event: Event): void {
+      event.stopPropagation();
+    });
+  }
+}
+
 function openMenu(event: MouseEvent, actions: MenuAction[]): void {
   closeMenu();
   // 背景在 aria-hidden 的 material 上；data-menu-material 是暗色主题换更亮描边的钩子
@@ -13,6 +29,7 @@ function openMenu(event: MouseEvent, actions: MenuAction[]): void {
   menu.className = CLASS.pop;
   menu.setAttribute("role", "menu");
   menu.setAttribute("data-menu-material", "translucent");
+  guardPopEvents(menu);
   menu.style.zIndex = String(Z_MENU);
   const material = document.createElement("div");
   material.className = CLASS.popMaterial;
@@ -104,21 +121,27 @@ function uninstallMenuBindings(): void {
 /**
  * 轴向由 scope 表声明；`group` 为 "all" 表示混合排序：整条 scope 就是一个组，没有跨组限制。
  *
- * 菜单位置按动作类别聚拢：两个排序动作在前，改判官方 / 第三方居中，收纳 / 恢复收尾。
+ * 菜单位置按动作类别聚拢：两个排序动作在前，改判官方 / 第三方居中，两级收纳收尾。
  * 改判项的文案直接写目标分类（当前是第三方就写「官方」），因为面板里看不到这一行现在归哪类，
  * 写「切换」只会让人猜点下去会变成什么。分类只是本地覆盖（见 `store.kinds`），不动插件本身。
+ *
+ * 收纳分两级：先说「收纳到更多」（把行从主列表挪进官方「更多」菜单，仍可从那里打开），
+ * 最后才是「收纳」（收进悬浮框，彻底从界面收起）。一级比一级退得更远，顺序照这个语义排。
  *
  * @param store 状态句柄，菜单项执行时经它改写顺序、分类与收纳状态。
  * @param scope 槽位 key。
  * @param id 右键点中的行 id。
  * @param group 限定组；"all" 表示整条 scope 一个组。
  * @param axis 轴向，"x" 时文案与图标取左右，其余取上下。
- * @returns 移动（上/下或左/右）、改判官方 / 第三方与收纳 / 恢复共四个动作，其中不可用方向按行在组内的位置置 disabled。
+ * @returns 移动（上/下或左/右）、改判官方 / 第三方、收纳到「更多」（仅侧边栏）与收纳 / 恢复，其中不可用方向按行在组内的位置置 disabled。
  */
 function menuActionsFor(store: StoreHandle, scope: string, id: string, group: string, axis: string): MenuAction[] {
   const state = store.get();
   const hidden = isHidden(state, scope, id);
   const official = kindOf(state, scope, id) === "official";
+  // 「更多」是侧边栏独有的官方收纳入口，别的槽位没有对应菜单，故只在侧边栏给出这一项。
+  const inMoreScope = moreScopeOk(scope) && !isSynthetic(scope, id);
+  const intoMore = inMoreScope && isIntoMore(state, scope, id);
   const ids = liveOrder(scope) || [];
   const groupIds: string[] = [];
   for (let i = 0; i < ids.length; i++) {
@@ -127,7 +150,7 @@ function menuActionsFor(store: StoreHandle, scope: string, id: string, group: st
   const at = groupIds.indexOf(id);
   const bound = group === "all" ? undefined : group;
   const horizontal = axis === "x";
-  return [
+  const actions: MenuAction[] = [
     {
       label: horizontal ? t("action.left") : t("action.up"),
       icon: horizontal ? MENU_ICON_LEFT : MENU_ICON_UP,
@@ -157,22 +180,39 @@ function menuActionsFor(store: StoreHandle, scope: string, id: string, group: st
           next.kinds[scope + ":" + id] = official ? "third" : "official";
         });
       }
-    },
-    {
-      label: hidden ? t("action.restore") : t("action.stash"),
-      icon: hidden ? MENU_ICON_UNARCHIVE : MENU_ICON_ARCHIVE,
+    }
+  ];
+  // 「收纳到更多」只对侧边栏面板行有意义：别的槽位没有官方「更多」菜单可收。
+  if (inMoreScope) {
+    actions.push({
+      label: intoMore ? t("action.outOfMore") : t("action.intoMore"),
+      icon: intoMore ? MENU_ICON_UNARCHIVE : MENU_ICON_ARCHIVE,
       disabled: false,
       run: function () {
         store.update(function (next) {
-          setHidden(next, scope, id, !hidden);
+          setIntoMore(next, scope, id, !intoMore);
         });
       }
+    });
+  }
+  actions.push({
+    label: hidden ? t("action.restore") : t("action.stash"),
+    icon: hidden ? MENU_ICON_UNARCHIVE : MENU_ICON_ARCHIVE,
+    disabled: false,
+    run: function () {
+      store.update(function (next) {
+        setHidden(next, scope, id, !hidden);
+      });
     }
-  ];
+  });
+  return actions;
 }
 
 /**
  * 管理列表走自己的 onContextMenu prop；轴向仍来自 scope 表。
+ *
+ * 菜单里的行是纵向一列，即使它原本属于横向槽位，「左移 / 右移」也没有意义——
+ * 那一列排的是所有收进来的行，顺序读的仍是该 scope 的 order。因此菜单行按 `y` 算。
  *
  * @param event 列表行的右键事件，处理时阻止默认菜单与冒泡。
  * @param ctx 上下文；当前实现未使用该参数。
@@ -185,7 +225,7 @@ function attachMenuAt(event: MouseEvent, ctx: CtxLike, store: StoreHandle, scope
   event.preventDefault();
   event.stopPropagation();
   const el = (event.currentTarget || event.target) as HTMLElement;
-  const axis = containerAxis(el, scope);
+  const axis = el.classList && el.classList.contains("lo-more-row") ? "y" : containerAxis(el, scope);
   openMenu(event, menuActionsFor(store, scope, id, group, axis));
 }
 

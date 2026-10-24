@@ -16,3 +16,6 @@ var ACTION_ICON_FEEDBACK = "@@svg:feedback.svg@16@@";
 // 搜索行的小图标：放大镜与清除都比标题行的动作图标小一号，颜色跟随所在元素的 currentColor。
 var UI_ICON_SEARCH = "@@svg:search.svg@13@@";
 var UI_ICON_CLOSE = "@@svg:close.svg@12@@";
+// 行内「挪回主列表」那个动作的图标（`action.outOfMore`）：素材是一个方框 + 一支朝右的箭头，
+// 与「收进更多」用的归档盘（MENU_ICON_ARCHIVE）成一对——一个往里收、一个往外取。
+var ACTION_ICON_OUT_OF_MORE = "@@svg:more-out.svg@12@@";

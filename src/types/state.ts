@@ -92,6 +92,10 @@ interface StateOptions {
   // 每个 scope 各自的分隔线开关；缺省（未设置）视为开，与 `showDivider` 取 AND。
   dividers: Record<string, boolean>;
   showStashLauncher: boolean;
+  // 分开收纳：打开时侧边栏的行只进侧边栏「更多」、对话区的行只进对话「更多」；关闭时两处共用一份清单。
+  separateMore: boolean;
+  // 「更多」菜单里画不画官方 / 第三方分隔线；与 `showDivider` 各管各的。
+  moreDivider: boolean;
   // 每个「有下属行」的折叠键（如 allowDragOfficial / showDivider）-> 是否折叠；缺省视为展开。
   collapsed: Record<string, boolean>;
   launcherSide: string;
@@ -109,13 +113,19 @@ interface PluginState {
   kinds: Record<string, string>;
   // "scope:id" -> true。收纳只关乎显示，不会注销任何注册。
   hidden: Record<string, boolean>;
+  // "scope:id" -> true。收进官方「更多」菜单：主列表里让位，改从「更多」菜单点开；与 hidden 互斥。
+  intoMore: Record<string, boolean>;
+  // region -> 菜单里各行的先后。键是菜单行的身份（`scope:id`）。
+  // 只记「这扇菜单里怎么排」，与各 scope 的 `order` 无关：一扇菜单能跨槽位列出好几处的行。
+  moreOrder: Record<string, string[]>;
   stashSort: string;
 }
 
 interface StoreHandle {
   get(): PluginState;
-  subscribe(fn: () => void): () => void;
-  update(mutator: (state: PluginState) => void): void;
+  subscribe(listener: (state: PluginState) => void): () => void;
+  // 修改函数可以原地改（常见情况），也可以返回一个替换用的 state。
+  update(mutator: (state: PluginState) => PluginState | void): void;
   replace(next: PluginState): void;
   reset(): void;
 }
