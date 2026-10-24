@@ -134,7 +134,7 @@ function SettingsPage(props: SettingsPageProps): any {
       }),
       // per-scope 子开关必须是**兄弟行**，不能塞进上面那个 Field 的 children——children 是右侧控件区（flex 行），放进去会横向排开。
       dividerOpen
-        ? DIVIDER_SCOPES.map(function (scope: string) {
+        ? DIVIDER_SCOPES.concat(DIVIDER_MENU_SCOPES).map(function (scope: string) {
             const on = state.options.dividers
               ? state.options.dividers[scope] !== false
               : true;
@@ -185,20 +185,6 @@ function SettingsPage(props: SettingsPageProps): any {
           onChange: function (value: boolean) {
             store.update(function (next: PluginState) {
               setOption(next, "separateMore", value);
-            });
-          }
-        })
-      }),
-      // 「更多」菜单自己的分隔线：页面上的那条线由 showDivider 管，菜单里这条单独一道。
-      h(Field, {
-        label: t("opt.moreDivider"),
-        hint: t("opt.moreDivider.hint"),
-        children: h(Switch, {
-          checked: state.options.moreDivider === true,
-          label: t("opt.moreDivider"),
-          onChange: function (value: boolean) {
-            store.update(function (next: PluginState) {
-              setOption(next, "moreDivider", value);
             });
           }
         })

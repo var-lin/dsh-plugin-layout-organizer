@@ -1,7 +1,7 @@
 const PLUGIN_ID = "dsh-plugin-layout-organizer";
 // 设置页大标题右侧展示的版本号。必须与 package.json 的 version 逐字一致——
 // test/accept.mjs 会断言两处相等，改版本时忘了同步这里会当场失败，而不是悄悄显示旧号。
-const PLUGIN_VERSION = "1.2.4";
+const PLUGIN_VERSION = "1.2.5";
 const NS = "layout-organizer";
 const STORAGE_KEY = "dsh.layout-organizer.state.v5";
 const STATE_VERSION = 5;
@@ -38,6 +38,10 @@ const DIVIDER_SCOPES: string[] = ["sidebar", "tabs", "settings"];
 // settings 的行画在设置弹窗（z-index:1000）里，线取 1010：压过对话框、低于 1100 的官方浮层；其余 scope 的线取 90 让对话框盖住。
 const DIVIDER_SCOPES_ON_DIALOG: string[] = ["settings"];
 const Z_DIVIDER_DIALOG = 1010;
+
+// 「更多」菜单里那道线的开关。它不在页面的五处槽位里，故不混进 DIVIDER_SCOPES
+// （那个数组是投影时按轴算线用的），只在设置页的分隔线开关列表里多出一行。
+const DIVIDER_MENU_SCOPES: string[] = ["more"];
 
 const SCOPES: ScopeDef[] = [
   { key: "sidebar", slot: "sidebar.panellist", labelKey: "scope.sidebar", nav: "click", axis: "y", outlet: '[data-slot="sidebar.panellist"]' },

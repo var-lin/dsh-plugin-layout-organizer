@@ -36,8 +36,8 @@ const ZH: Record<string, string> = {
   "opt.showLauncher.hint": "关闭后只能用快捷键或本页按钮打开悬浮框。",
   "opt.separateMore": "分开收纳",
   "opt.separateMore.hint": "打开后侧边栏的按钮（含侧边栏底部按钮）只收进侧边栏的「更多」，对话区的按钮只收进对话的「更多」；关闭时两处共用一份清单，收进哪一处都在两处出现。",
-  "opt.moreDivider": "在「更多」菜单里画分隔线",
-  "opt.moreDivider.hint": "只在「更多」菜单里生效：官方按钮排前面、第三方按钮排后面，中间画一条线。与下面的总开关各管各的。",
+  "opt.divider.more": "显示「更多」菜单里的分隔线",
+  "opt.divider.more.hint": "官方按钮排前面、第三方按钮排后面，中间画一条线。",
 
   "sort.scope": "按页面",
   "sort.kind": "按分类",
@@ -156,8 +156,8 @@ const EN: Record<string, string> = {
   "opt.showLauncher.hint": "When off, only the shortcut or this page can open the floating frame.",
   "opt.separateMore": "Keep the two More menus apart",
   "opt.separateMore.hint": "When on, sidebar buttons (including the sidebar footer) only go into the sidebar More, and conversation buttons only into the conversation More. When off, both menus share one list, so anything tucked in shows up in both.",
-  "opt.moreDivider": "Draw the divider inside the More menu",
-  "opt.moreDivider.hint": "Applies to the More menu only: official buttons come first, third-party buttons after, with a line between them. It works independently of the master switch below.",
+  "opt.divider.more": "Divider inside the More menu",
+  "opt.divider.more.hint": "Official buttons first, third-party after, with a line between them.",
 
   "sort.scope": "By page",
   "sort.kind": "By kind",

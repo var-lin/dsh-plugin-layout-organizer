@@ -95,7 +95,6 @@ interface StateOptions {
   // 分开收纳：打开时侧边栏的行只进侧边栏「更多」、对话区的行只进对话「更多」；关闭时两处共用一份清单。
   separateMore: boolean;
   // 「更多」菜单里画不画官方 / 第三方分隔线；与 `showDivider` 各管各的。
-  moreDivider: boolean;
   // 每个「有下属行」的折叠键（如 allowDragOfficial / showDivider）-> 是否折叠；缺省视为展开。
   collapsed: Record<string, boolean>;
   launcherSide: string;

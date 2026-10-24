@@ -19,7 +19,6 @@ function defaultState(): PluginState {
       dividers: {},
       showStashLauncher: true,
       separateMore: false,
-      moreDivider: false,
       collapsed: {},
       launcherSide: "right",
       // 横向跟手只落在手势状态里，store 侧不记录拖动中的横坐标；松手后贴左 / 贴右由 launcherSide 决定。
@@ -88,9 +87,8 @@ function normalizeState(raw: unknown): PluginState {
   // per-scope 分隔线开关：只接受布尔值，缺省视为开。
   base.options.dividers = asBoolMap(options.dividers) as Record<string, boolean>;
   base.options.showStashLauncher = options.showStashLauncher !== false;
-  // 缺省关闭：老数据没有这两个键，保持两处「更多」共用一份清单、菜单里不画线。
+  // 缺省关闭：老数据没有这个键，保持两处「更多」共用一份清单。
   base.options.separateMore = options.separateMore === true;
-  base.options.moreDivider = options.moreDivider === true;
   base.options.collapsed = asBoolMap(options.collapsed) as Record<string, boolean>;
   const launcherSide = options.launcherSide;
   base.options.launcherSide = typeof launcherSide === "string" && LAUNCHER_SIDES.indexOf(launcherSide) >= 0 ? launcherSide : "right";
@@ -340,7 +338,10 @@ function moreScopesIn(state: PluginState, region: string): string[] {
  * @returns 菜单内画线时为真。
  */
 function moreDividerOn(state: PluginState): boolean {
-  return state.options.moreDivider === true;
+  // 和页面上的线共用一套开关：总开关关着时菜单里也不画，分项里的 `more` 单独管这一处。
+  if (state.options.showDivider !== true) return false;
+  const map = state.options.dividers || {};
+  return map.more !== false;
 }
 
 /**
@@ -418,6 +419,8 @@ function moreRowsIn(state: PluginState, region: string): Array<{ scope: string; 
     const scope = key.slice(0, cut);
     const id = key.slice(cut + 1);
     if (!id || seen[key]) continue;
+    // 兜底也得看归属：不然打开「分开收纳」后，两处菜单都会把对方的行补进来。
+    if (!allowed[scope]) continue;
     if (isSynthetic(scope, id)) continue;
     if (!isIntoMore(state, scope, id)) continue;
     seen[key] = true;

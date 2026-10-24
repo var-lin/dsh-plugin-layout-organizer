@@ -3,6 +3,16 @@
 本项目的所有重要变更都记录在这里。
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [1.2.5] - 2026-10-25
+
+### 变更
+
+- **「更多」菜单的分隔线开关并入分隔线那一组**：原来它是开关列表之外单独的一行，现在改成「画分隔线」总开关下的一个分项，和另外三个分项一样——总开关关着时一起灰着，点它会把总开关顶起来。
+
+### 修复
+
+- **「分开收纳」时两处「更多」互相串台**：打开这个开关后，本该归侧边栏「更多」的行也会出现在对话页「更多」里，反之亦然——补充「还没投影到屏幕上的行」那一步没看归属。现在侧边栏那处只列侧边栏顶部、侧边栏底部与设置页导航的行，对话那处只列对话标签与输入框停靠行的行。
+
 ## [1.2.4] - 2026-10-25
 
 ### 新增
@@ -130,6 +140,7 @@
 - 官方 / 第三方分类依赖内置 id 白名单，因为槽位条目没有可靠的来源字段；任何行都可以在设置页手动改判。
 - 「收纳」不是卸载；被收纳的按钮只是隐藏，其插件仍在运行。
 
+[1.2.5]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.5
 [1.2.4]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.4
 [1.2.3]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.3
 [1.2.2]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.2
