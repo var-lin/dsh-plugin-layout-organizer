@@ -134,7 +134,7 @@ function SettingsPage(props: SettingsPageProps): any {
       }),
       // per-scope 子开关必须是**兄弟行**，不能塞进上面那个 Field 的 children——children 是右侧控件区（flex 行），放进去会横向排开。
       dividerOpen
-        ? DIVIDER_SCOPES.concat(DIVIDER_MENU_SCOPES).map(function (scope: string) {
+        ? DIVIDER_SCOPES.concat(moreAvailable() ? DIVIDER_MENU_SCOPES : []).map(function (scope: string) {
             const on = state.options.dividers
               ? state.options.dividers[scope] !== false
               : true;
@@ -176,7 +176,9 @@ function SettingsPage(props: SettingsPageProps): any {
         })
       }),
       // 两处「更多」的分工。与上面那些开关各管各的：它只决定收进去的行归哪一处列出来。
-      h(Field, {
+      // 宿主没有「更多」时这两处都不存在，开关也就没有对象，干脆不画（见 moreAvailable）。
+      moreAvailable()
+        ? h(Field, {
         label: t("opt.separateMore"),
         hint: t("opt.separateMore.hint"),
         children: h(Switch, {
@@ -188,7 +190,8 @@ function SettingsPage(props: SettingsPageProps): any {
             });
           }
         })
-      }),
+      })
+        : null,
       // 全局重置：两步确认，误触不生效。状态还是出厂值时按钮灰着——按下去什么也不会变。
       h(Field, {
         label: t("action.resetAll"),

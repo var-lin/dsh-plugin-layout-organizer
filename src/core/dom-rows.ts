@@ -58,6 +58,8 @@ function collectSidebarUnits(): RowUnit[] | null {
       const slotOutlet = kid.querySelector('[data-slot="sidebar.panellist"]');
       const moreButton = slotOutlet ? null : kid.querySelector("[aria-haspopup='menu']");
       if (moreButton || String(kid.className || "").indexOf("moreAnchor") >= 0) {
+        // 宿主确实画了「更多」——这扇菜单存在，把能力闸门打开（见 moreAvailable）。
+        noteMoreAvailable();
         units.push({ el: kid, id: synthetic[next] !== undefined ? synthetic[next] : "sidebar-" + next });
         next++;
         continue;

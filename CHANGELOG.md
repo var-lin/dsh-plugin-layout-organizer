@@ -3,6 +3,12 @@
 本项目的所有重要变更都记录在这里。
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [1.2.6] - 2026-10-25
+
+### 修复
+
+- **老版本 DSH 上不再出现「进更多」**：没有「更多」菜单的宿主上，这些按钮和开关一律不画；否则点了行会消失，却没法再点回来。
+
 ## [1.2.5] - 2026-10-25
 
 ### 变更
@@ -140,6 +146,7 @@
 - 官方 / 第三方分类依赖内置 id 白名单，因为槽位条目没有可靠的来源字段；任何行都可以在设置页手动改判。
 - 「收纳」不是卸载；被收纳的按钮只是隐藏，其插件仍在运行。
 
+[1.2.6]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.6
 [1.2.5]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.5
 [1.2.4]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.4
 [1.2.3]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.3

@@ -5,6 +5,8 @@
 A DSH client plugin that lets you **drag plugin buttons where you want them, draw a line between official and third-party entries, and stash the ones you rarely use**. It only changes where a button is *shown* — it never uninstalls, enables or disables a plugin. Buttons inside DSH's own More menus are covered too.
 
 > Targets DSH `>=0.1.7-rc.2`: every `0.1.x` and `0.2.x` build from `0.1.7-rc.2` on (all release candidates plus the `0.2.1` release) runs the same code — no per-version package needed.
+>
+> Anything that depends on the More menu ("Into More" / "Out of More", "Keep the two More menus apart", the divider inside the More menu) only appears on hosts that actually have More — that arrived in `0.2.1-rc.3`. On older hosts those entries are simply not drawn; everything else works as usual.
 
 ---
 

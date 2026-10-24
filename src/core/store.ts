@@ -299,7 +299,40 @@ function isIntoMore(state: PluginState, scope: string, id: string): boolean {
  * @returns 可以收进「更多」时为真。
  */
 function moreScopeOk(scope: string): boolean {
-  return MORE_SCOPES.indexOf(scope) >= 0;
+  if (MORE_SCOPES.indexOf(scope) < 0) return false;
+  return moreAvailable();
+}
+
+/**
+ * 这一版宿主有没有「更多」这扇菜单。
+ *
+ * 侧边栏与对话页那两处是同一个版本（0.2.1-rc.3）里一起加的，故用侧边栏那颗按钮当判据：
+ * 它只在 `sidebar.panellist.actions` 真有内容时才被宿主画出来（`hasEntryActions`），
+ * 所以「列表里有没有一颗带 `aria-haspopup` 的按钮」本身就是宿主的自我声明——
+ * 比读版本号可靠：不用解析版本字符串，也不怕以后侧边栏换皮。
+ *
+ * 老宿主上这个判断为假，于是「进更多」这类按钮干脆不画，也就不会出现「点完行消失、
+ * 却没有菜单能把它点回来」的死路（设置页那行按钮、悬浮包那行按钮、右键菜单都走同一道闸门）。
+ *
+ * @returns 宿主支持「更多」时为真。
+ */
+let loMoreSeen = false;
+
+function moreAvailable(): boolean {
+  if (loMoreSeen) return true;
+  if (typeof document === "undefined" || !document.querySelector) return false;
+  const list = document.querySelector("nav[class*='panelList'], [class*='panelList']");
+  if (!list || !list.querySelector) return false;
+  return list.querySelector("button[aria-haspopup='menu']") !== null;
+}
+
+/**
+ * 记下「这一版宿主确实有『更多』」——投影认领到那颗按钮时调用。
+ *
+ * 认到一次之后本会话内不再探测：那个 DOM 查询每次渲染都做一遍没必要，而菜单不会中途消失。
+ */
+function noteMoreAvailable(): void {
+  loMoreSeen = true;
 }
 
 /**
@@ -324,6 +357,7 @@ function moreRegionOf(scope: string): string {
  * @returns 该菜单该读的槽位 key 列表。
  */
 function moreScopesIn(state: PluginState, region: string): string[] {
+  if (!moreAvailable()) return [];
   if (state.options.separateMore !== true) return MORE_SCOPES.slice();
   const out: string[] = [];
   let i;
