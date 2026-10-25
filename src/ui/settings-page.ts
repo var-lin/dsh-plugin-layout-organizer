@@ -216,18 +216,20 @@ function SettingsPage(props: SettingsPageProps): any {
     h(ShortcutCard, { key: "shortcut", ctx: ctx, store: store })
   ];
 
-  // 搜索时藏起「打开按钮收纳包」这张卡片：它是一条固定入口、没有可搜的名称或 id，
-  // 留着只会在结果列表最前面占掉一行，且「收纳包」这个词本身也搜不到它。
+  // 搜索时藏起「打开已收起的按钮」这张卡片：它是一条固定入口、没有可搜的名称或 id，
+  // 留着只会在结果列表最前面占掉一行，且这行字本身也搜不到它。
   const layoutBody: any[] = searching
     ? []
     : [
-        h(Card, { key: "stash", title: t("section.stash") },
-          h(Field, {
-            label: t("stash.title"),
-            hint: t("stash.count").replace("{count}", String(stashCount(state))),
-            children: h(Btn, { variant: "primary", onClick: props.onOpenStash }, t("action.openStash"))
-          })
-        )
+        // 数量跟在标题后面，不另占一行：这张卡片只有一处入口，正文留空反而更矮、更好扫。
+        h(Card, {
+          key: "stash",
+          title: h("span", null,
+            t("stash.title"),
+            h("span", { className: "lo-card-note" }, t("stash.count").replace("{count}", String(stashCount(state))))
+          ),
+          action: h(Btn, { variant: "primary", onClick: props.onOpenStash }, t("action.openStash"))
+        })
       ];
   for (i = 0; i < scopeCards.length; i++) {
     if (scopeCards[i]) layoutBody.push(scopeCards[i]);

@@ -3,14 +3,14 @@ const inject = ["slots", "locale"];
 /**
  * 把「更多」菜单的内容注册进一处宿主槽位。
  *
- * 两处「更多」（侧边栏的与对话顶部的）是同一个组件、不同的 `region`：组件据此决定
- * 读哪一份清单（见 `moreScopesIn`）。缺这个槽位的老宿主上整块跳过并降级，
+ * 「更多」那几处（左侧栏、右侧栏「更多工具」、对话顶部）是同一个组件、不同的 `region`：
+ * 组件据此决定读哪一份清单（见 `moreScopesIn`）。缺这个槽位的老宿主上整块跳过并降级，
  * 免得在本该没有「更多」的地方凭空造出一个空菜单。
  *
  * @param ctx 插件上下文，用来取槽位服务。
  * @param store 状态句柄，注入给菜单行。
  * @param slot 宿主槽位名。
- * @param region 这处菜单的归属（`sidebar` / `conversation`）。
+ * @param region 这处菜单的归属（`sidebar` / `conversation` / `rightbar`）。
  * @param noteDegrade 降级上报。
  */
 function injectMoreSlot(
@@ -151,10 +151,12 @@ function apply(ctx: CtxLike): void {
   // 宿主才会为这个槽位点亮「更多」按钮（host 侧 `hasEntryActions` 就是看这个 list 非空），
   // 所以老宿主缺这个槽位时整块跳过，而不是让「更多」凭空出现又空着。
   //
-  // 两处「更多」共用同一份内容：侧边栏的「更多」与对话顶部「…」各是一个槽位，
-  // 组件按宿主传进来的 `region` 决定读哪一份清单（分开收纳时两处才各管各的，见 moreScopesIn）。
+  // 三处「更多」共用同一份内容：左侧栏的「更多」、右侧栏「开始」页的「更多工具」、对话顶部的
+  // 「…」各是一个槽位，组件按宿主传进来的 `region` 决定读哪一份清单（见 moreScopesIn）。
+  // 右侧栏那处单列一个归属：它永远列全部收进来的按钮，「分开收纳」开关对它无效。
   const moreSlots: Array<{ slot: string; region: string }> = [
     { slot: "sidebar.panellist.actions", region: "sidebar" },
+    { slot: "sidebar.right.tab.guide.actions", region: MORE_REGION_ALL },
     { slot: "conversation.session.header.views.actions", region: "conversation" }
   ];
   for (let slotAt = 0; slotAt < moreSlots.length; slotAt++) {

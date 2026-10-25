@@ -142,6 +142,8 @@ const CSS_TEXT: string[] = [
   ".lo-card[data-collapsible='1']>.lo-card-head{cursor:pointer}",
   ".lo-card[data-collapsible='1']>.lo-card-head:hover .lo-card-title{color:var(--dsw-alias-brand-primary)}",
   ".lo-card-title{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  // 标题后面的附注（当前数量这类）：和标题同一行，但字号小一号、颜色降一级，不抢主次。
+  ".lo-card-note{margin-left:8px;font-size:11.5px;font-weight:400;color:var(--dsw-alias-label-secondary)}",
   // 小三角紧跟类名（与收纳包分组标题同一位置）：展开朝下、收起转 -90°。
   ".lo-card-caret{flex:0 0 auto;display:inline-block;width:10px;font-size:10px;line-height:1;color:var(--dsw-alias-label-secondary);transition:transform .12s ease}",
   ".lo-card[data-open='0'] .lo-card-caret{transform:rotate(-90deg)}",

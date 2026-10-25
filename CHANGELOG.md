@@ -3,6 +3,20 @@
 本项目的所有重要变更都记录在这里。
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [1.2.7] - 2026-10-25
+
+### 新增
+
+- **右侧栏「开始」页的「更多工具」也会列出收进来的按钮**：它和左侧栏的「更多」列同一批按钮、同一套顺序，在哪边拖动排序两边一起变；「分开收纳」对它不生效，它永远列全部。
+
+### 变更
+
+- **统一叫「已收起的按钮」**：设置页那张卡片原来叫「悬浮框」，和紧接着的「已收起的按钮」叠成两层说法；现在只剩一层，当前数量也挪到标题后面，不再单独占一行。面板、启动器开关的说明与空列表提示里的「悬浮框」一并改掉。
+
+### 修复
+
+- **空列表与隐藏说明还在用旧动作名**：那两句原写「选择『收纳』」「收纳只影响显示」，而这个动作早改叫「收起」了，现在说法一致。
+
 ## [1.2.6] - 2026-10-25
 
 ### 修复
@@ -146,6 +160,7 @@
 - 官方 / 第三方分类依赖内置 id 白名单，因为槽位条目没有可靠的来源字段；任何行都可以在设置页手动改判。
 - 「收纳」不是卸载；被收纳的按钮只是隐藏，其插件仍在运行。
 
+[1.2.7]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.7
 [1.2.6]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.6
 [1.2.5]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.5
 [1.2.4]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.2.4

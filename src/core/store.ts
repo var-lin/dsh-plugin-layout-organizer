@@ -350,19 +350,33 @@ function moreRegionOf(scope: string): string {
  * 一处「更多」菜单这一轮该列出哪些槽位的行。
  *
  * 打开「分开收纳」时按归属分流：侧边栏那处只收侧边栏与底部按钮，对话那处只收标签与停靠行。
- * 关闭时两处共用一份清单——收进任何一处，两处都列得出来。
+ * 关闭时两处共用一份清单——收进任何一处，两处都列得出来。右侧栏「更多工具」例外：它不参与
+ * 分流，永远列全部（用户要求）。
  *
  * @param state 当前状态。
- * @param region `sidebar` 或 `conversation`。
+ * @param region `sidebar` / `conversation` / `rightbar`。
  * @returns 该菜单该读的槽位 key 列表。
  */
 function moreScopesIn(state: PluginState, region: string): string[] {
   if (!moreAvailable()) return [];
+  if (region === MORE_REGION_ALL) return MORE_SCOPES.slice();
   if (state.options.separateMore !== true) return MORE_SCOPES.slice();
   const out: string[] = [];
   let i;
   for (i = 0; i < MORE_SCOPES.length; i++) if (moreRegionOf(MORE_SCOPES[i]) === region) out.push(MORE_SCOPES[i]);
   return out;
+}
+
+/**
+ * 这处菜单的行顺序记在哪个键下。
+ *
+ * 右侧栏那扇与左侧栏共用一份顺序：两扇菜单列的是同一批按钮，在哪边拖都该同步。
+ *
+ * @param region 菜单归属。
+ * @returns 存 `moreOrder` 时用的键。
+ */
+function moreOrderRegion(region: string): string {
+  return region === MORE_REGION_ALL ? MORE_REGIONS[0] : region;
 }
 
 /**
@@ -479,7 +493,7 @@ function moreRowsIn(state: PluginState, region: string): Array<{ scope: string; 
  * @returns 记过的键序列；没排过时是空数组（各按各的默认顺序画）。
  */
 function moreOrderOf(state: PluginState, region: string): string[] {
-  return state.moreOrder[region] || [];
+  return state.moreOrder[moreOrderRegion(region)] || [];
 }
 
 /**
@@ -490,7 +504,7 @@ function moreOrderOf(state: PluginState, region: string): string[] {
  * @param keys 从上到下的行身份（见 `PluginState.moreOrder` 的说明）。
  */
 function setMoreOrder(state: PluginState, region: string, keys: string[]): void {
-  state.moreOrder[region] = keys.slice();
+  state.moreOrder[moreOrderRegion(region)] = keys.slice();
 }
 
 /**

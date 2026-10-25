@@ -5,7 +5,6 @@ const ZH: Record<string, string> = {
   "version.hint": "当前插件版本",
 
   "section.options": "通用设置",
-  "section.stash": "悬浮框",
   "section.shortcut": "快捷键",
 
   "tab.general": "通用设置",
@@ -33,9 +32,9 @@ const ZH: Record<string, string> = {
   "opt.divider.settings": "显示设置页侧边栏按钮分隔线",
   "opt.divider.settings.hint": "只影响设置页侧边栏按钮这一组，其余位置不受影响。",
   "opt.showLauncher": "显示悬浮按钮",
-  "opt.showLauncher.hint": "关闭后只能用快捷键或本页按钮打开悬浮框。",
+  "opt.showLauncher.hint": "关闭后只能用快捷键或本页按钮打开这个面板。",
   "opt.separateMore": "分开收纳",
-  "opt.separateMore.hint": "打开后侧边栏的按钮（含侧边栏底部按钮）只收进侧边栏的「更多」，对话区的按钮只收进对话的「更多」；关闭时两处共用一份清单，收进哪一处都在两处出现。",
+  "opt.separateMore.hint": "打开后侧边栏的按钮（含侧边栏底部按钮）只收进侧边栏的「更多」，对话区的按钮只收进对话的「更多」；关闭时两处共用一份清单，收进哪一处都在两处出现。右侧栏的「更多工具」不受影响，始终列全部。",
   "opt.divider.more": "显示「更多」菜单里的分隔线",
   "opt.divider.more.hint": "官方按钮排前面、第三方按钮排后面，中间画一条线。",
 
@@ -93,7 +92,7 @@ const ZH: Record<string, string> = {
   "note.importOk": "导入成功，配置已更新。",
   "note.importFail": "导入失败：这不是本插件导出的配置文件。",
 
-  "empty.stash": "悬浮框里还没有内容。在任意按钮上右键，选择「收纳」即可放进来。",
+  "empty.stash": "这里还没有内容。在任意按钮上右键，选「收起」就会放进来。",
   "empty.list": "这里还没有按钮。",
   "empty.search": "没有匹配的按钮。清空搜索框即可看到全部。",
 
@@ -112,7 +111,7 @@ const ZH: Record<string, string> = {
   "shortcut.failed": "保存失败（{status}），快捷键未改动。",
   "shortcut.hint": "快捷键同样可以在 DSH 的「快捷键」设置里修改。",
 
-  "note.hideOnly": "收纳只影响显示，随时可以在悬浮框里恢复。",
+  "note.hideOnly": "收起只影响显示，随时可以在这里恢复。",
   "note.degrade": "部分能力不可用，已自动降级：",
 
   "nav.failed": "无法打开「{label}」，该按钮可能已不可用。"
@@ -125,7 +124,6 @@ const EN: Record<string, string> = {
   "version.hint": "Installed plugin version",
 
   "section.options": "General",
-  "section.stash": "Floating frame",
   "section.shortcut": "Shortcut",
 
   "tab.general": "General",
@@ -153,9 +151,9 @@ const EN: Record<string, string> = {
   "opt.divider.settings": "Divider for Settings navigation buttons",
   "opt.divider.settings.hint": "Applies only to the Settings navigation button group; other locations are unaffected.",
   "opt.showLauncher": "Show the floating button",
-  "opt.showLauncher.hint": "When off, only the shortcut or this page can open the floating frame.",
+  "opt.showLauncher.hint": "When off, only the shortcut or this page can open this panel.",
   "opt.separateMore": "Keep the two More menus apart",
-  "opt.separateMore.hint": "When on, sidebar buttons (including the sidebar footer) only go into the sidebar More, and conversation buttons only into the conversation More. When off, both menus share one list, so anything tucked in shows up in both.",
+  "opt.separateMore.hint": "When on, sidebar buttons (including the sidebar footer) only go into the sidebar More, and conversation buttons only into the conversation More. When off, both menus share one list, so anything tucked in shows up in both. The right sidebar's \"More tools\" is not affected and always lists everything.",
   "opt.divider.more": "Divider inside the More menu",
   "opt.divider.more.hint": "Official buttons first, third-party after, with a line between them.",
 
@@ -208,7 +206,7 @@ const EN: Record<string, string> = {
   "note.importOk": "Imported; the configuration is updated.",
   "note.importFail": "Import failed: that is not a configuration file exported by this plugin.",
 
-  "empty.stash": "The floating frame is empty. Right-click any button and choose Stash to put it here.",
+  "empty.stash": "Nothing here yet. Right-click any button and choose Tuck away to put it here.",
   "empty.list": "No buttons here yet.",
   "empty.search": "No matching buttons. Clear the search box to see everything.",
 
@@ -227,7 +225,7 @@ const EN: Record<string, string> = {
   "shortcut.failed": "Could not save ({status}); the shortcut is unchanged.",
   "shortcut.hint": "The shortcut can also be changed in the DSH Shortcuts settings.",
 
-  "note.hideOnly": "Stashing affects display only; restore it from the floating frame at any time.",
+  "note.hideOnly": "Tucking away affects display only; restore it here at any time.",
   "note.degrade": "Some capabilities are unavailable; running degraded:",
 
   "nav.failed": "Could not open “{label}”; that button may no longer be available."

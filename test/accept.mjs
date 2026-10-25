@@ -72,8 +72,10 @@ t("13b context menu reclassifies official / third-party",
   existsSync(join(root, "assets", "icons", "switch.svg")) &&
   /next\.kinds\[scope \+ ":" \+ id\] = official \? "third" : "official"/.test(code),
   (code.match(/MENU_ICON_SWITCH/g) || []).length + " refs");
-/* 收纳包对用户改叫「悬浮框」：那个词既不准确（它本来就飘着）又不好听。 */
-t("14 wording is 悬浮框", locale.includes("悬浮框") && !locale.includes("收纳包"));
+/* 这个词换过两次：先叫「按钮收纳包」，后叫「悬浮框」，最后只留「已收起的按钮」这一个说法——
+ * 界面上不该再出现前两个，三层说法叠在一起只会让人以为它们是不同的东西。 */
+t("14 wording is 已收起的按钮 alone",
+  locale.includes("已收起的按钮") && !locale.includes("收纳包") && !locale.includes("悬浮框"));
 /* 分页里的滚动区是定高 flex 列：卡片与收纳行若允许收缩，就会被压扁成「只剩卡片头」，
    内容互相压住。三处滚动区都必须显式关掉收缩。 */
 {
@@ -91,7 +93,7 @@ t("14 wording is 悬浮框", locale.includes("悬浮框") && !locale.includes("�
     trough.includes("--dsw-alias-interactive-bg-hover") && !/background:var\(--dsw-alias-bg-(base|layer-1|layer-2)\)/.test(trough),
     trough.slice(0, 120));
 }
-/* 搜索期间「打开按钮收纳包」是固定入口、没有可搜的名称或 id，必须整张让位。 */
+/* 搜索期间「打开已收起的按钮」是固定入口、没有可搜的名称或 id，必须整张让位。 */
 {
   const flat = code.replace(/\s+/g, "");
   t("18 stash entry card steps aside while searching",
@@ -123,7 +125,7 @@ t("14 wording is 悬浮框", locale.includes("悬浮框") && !locale.includes("�
     /action:h\(ConfirmBtn,\{label:t\("action\.reset"\)/.test(flat),
     flat.slice(flat.indexOf("interfaceCardProps"), flat.indexOf("interfaceCardProps") + 50));
 }
-/* 收纳包按位置 / 种类分组时，标题行右侧带一个「恢复本组默认」；
+/* 已收起的按钮按位置 / 种类分组时，标题行右侧带一个「恢复本组默认」；
    按名称排序没有标题，因此不放按钮。 */
 {
   const flat = code.replace(/\s+/g, "");
@@ -151,8 +153,8 @@ t("23 version badge matches package.json",
     flat.slice(flat.indexOf("if(scopeHit(ctx,state,SCOPES"), flat.indexOf("if(scopeHit(ctx,state,SCOPES") + 60));
 }
 
-/* 界面上本来点不动的行（例如 token-saver 那种只读统计条）在收纳包里也必须不可点：
-   导航会关掉收纳包与设置弹窗，「可点却毫无反应」比灰着更像坏掉。
+/* 界面上本来点不动的行（例如 token-saver 那种只读统计条）在已收起的按钮里也必须不可点：
+   导航会关掉面板与设置弹窗，「可点却毫无反应」比灰着更像坏掉。
    判据取界面本身（`rowClickable`）而不是位置名，因此换插件、换位置都不用改代码。 */
 {
   const flat = code.replace(/\s+/g, "");

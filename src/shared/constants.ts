@@ -1,7 +1,7 @@
 const PLUGIN_ID = "dsh-plugin-layout-organizer";
 // 设置页大标题右侧展示的版本号。必须与 package.json 的 version 逐字一致——
 // test/accept.mjs 会断言两处相等，改版本时忘了同步这里会当场失败，而不是悄悄显示旧号。
-const PLUGIN_VERSION = "1.2.6";
+const PLUGIN_VERSION = "1.2.7";
 const NS = "layout-organizer";
 const STORAGE_KEY = "dsh.layout-organizer.state.v5";
 const STATE_VERSION = 5;
@@ -99,6 +99,11 @@ const MORE_SCOPE_HOME: Record<string, string> = {
 
 // 「更多」菜单的两处容器，值与 MORE_SCOPE_HOME 里的归属一致。
 const MORE_REGIONS: string[] = ["sidebar", "conversation"];
+
+// 右侧栏「开始」页那颗「更多工具」：与左侧栏同一份内容，但不受「分开收纳」影响——它不属于
+// 任何一处归属，永远列出五处槽位里被收进「更多」的行（见 moreScopesIn）。顺序与左侧栏共用
+// 一份（见 moreOrderRegion），在哪边拖都一样。
+const MORE_REGION_ALL = "rightbar";
 
 // 用量百分比不是 slot 记录而是出口的兄弟节点，故合成 id。
 // 侧边栏的「更多」同理：它没有 panellist 出口，官方把菜单按钮包进 moreAnchor 包裹层（见 collectSidebarUnits）。
