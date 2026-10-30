@@ -32,17 +32,8 @@ interface StashRowProps {
   onIntoMore?: (row: StashItem) => void;
 }
 
-interface StashPanelProps {
-  ctx: CtxLike;
-  store: StoreHandle;
-}
-
-interface StashLauncherProps {
-  ctx: CtxLike;
-  store: StoreHandle;
-}
-
-interface StashSurfaceProps {
+// 面板、启动器与挂载点这三个组件的 props 完全同构：都要宿主上下文与状态句柄。
+interface StashProps {
   ctx: CtxLike;
   store: StoreHandle;
 }
@@ -82,14 +73,16 @@ function stashView(ctx: CtxLike, state: PluginState): StashItem[] {
     // 取名字的规则与「更多」菜单共用一处（见 rowLabelText），两处才叫同一个名字。
     const label = rowLabelText(ctx, item.scope, item.id);
     // 「找不到这一行」= 这一行不在屏幕上；此时只是不能导航过去，恢复按钮照常可用（见 StashRow）。
-    // 五处槽位同一把尺子（见 listedInScope）：只有这一轮投影真正标记到的行才算存在，scope 整个
+    // 六处槽位同一把尺子（见 listedInScope）：只有这一轮投影真正标记到的行才算存在，scope 整个
     // 不在屏幕上时也不退守台账——否则会留下一条永远渲染不出来的影子行让人去恢复。
     const live = liveRowIds(item.scope);
     const missing = !listedInScope(live, item.id);
-    // 设置页的行只在设置弹窗那一页才投影得到，可那扇弹窗随时能打开，所以照样算「存在」
-    // （与 `rowNavigable` 里对 settings 的例外一致）；其余四处没投影到就是真不在屏幕上。
-    const unlisted = missing && item.scope !== "settings";
     const navigable = rowNavigable(item.scope, item.id);
+    // 设置页的行只在设置弹窗那一页才投影得到，可那扇弹窗随时能打开，所以照样算「存在」
+    // （与 `rowNavigable` 里对 settings 的例外一致）。右栏卡片没有台账，右栏收起或正显示
+    // 别的页面时同样投影不到，但导航能把它展开、翻到「开始」页再点（见 `navigateTo` 的三级
+    // 回退），所以只要导航得到就仍然算「存在」；其余位置没投影到就是真不在屏幕上。
+    const unlisted = missing && item.scope !== "settings" && !navigable;
     out.push({
       scope: item.scope,
       id: item.id,
@@ -108,12 +101,9 @@ function stashView(ctx: CtxLike, state: PluginState): StashItem[] {
 
 function sortStash(rows: StashItem[], mode: string): StashItem[] {
   const copy = rows.slice();
+  // 「按种类」的分组由 groupStash 完成，组内每行的 kind 都相同，所以这里只需按位置/顺序排。
   copy.sort(function (a: StashItem, b: StashItem): number {
     if (mode === "alpha") return a.label.localeCompare(b.label);
-    if (mode === "kind") {
-      if (a.kind !== b.kind) return a.kind === "official" ? -1 : 1;
-      return a.scopeIndex - b.scopeIndex || a.orderIndex - b.orderIndex;
-    }
     return a.scopeIndex - b.scopeIndex || a.orderIndex - b.orderIndex;
   });
   return copy;
@@ -195,7 +185,13 @@ function StashRow(props: StashRowProps): any {
   if (row.missing) hint = t("scope.missing");
   else if (!row.navigable) hint = t("action.static");
   const icon = rowIconOf(row.scope, row.id);
-  return h("div", { className: "lo-stash-row" },
+  const onIntoMore = props.canIntoMore ? props.onIntoMore : undefined;
+  return h("div", {
+    className: "lo-stash-row",
+    // 拖到面板外面松手就恢复（`drag-stash.ts`）：行上带位置与 id，手势不回头猜。
+    "data-lo-stash-scope": row.scope,
+    "data-lo-stash-id": row.id
+  },
     h("button", {
       type: "button",
       className: "lo-stash-main",
@@ -211,15 +207,13 @@ function StashRow(props: StashRowProps): any {
     ),
     // 「进更多」放在「恢复」左边：级别由近到远是「列表 → 更多 → 悬浮框」，
     // 从左到右正好是「进更多」再「恢复回列表」（用户 m06865#2 指定这个顺序）。
-    // 哪几处槽位有「更多」这个容器不归这里管，问 `moreScopeOk`。
-    props.canIntoMore && props.onIntoMore
-      ? h(Btn, {
-        title: t("action.intoMore"),
-        onClick: function () {
-          props.onIntoMore(row);
-        }
-      }, t("action.intoMore"))
-      : null,
+    // 哪几处槽位有「更多」这个容器不归这里管，问 `moreScopeOk`（封装在 `canTuckIntoMore` 里）。
+    // 不能收的行（设置页导航、三颗「更多」入口）照样把这颗按钮画出来、只是禁用：
+    // 与设置页那张卡片同一套处理（同一个 `IntoMoreButton`），一行里按钮列不会左右参差。
+    h(IntoMoreButton, {
+      intoMore: false,
+      onToggle: onIntoMore ? function () { onIntoMore(row); } : undefined
+    }),
     h(Btn, {
       title: t("action.restore"),
       variant: "soft",
@@ -230,7 +224,7 @@ function StashRow(props: StashRowProps): any {
   );
 }
 
-function StashPanel(props: StashPanelProps): any {
+function StashPanel(props: StashProps): any {
   const ctx = props.ctx;
   const store = props.store;
   useStoreTick(store);
@@ -241,6 +235,8 @@ function StashPanel(props: StashPanelProps): any {
   const queryPair = useState("");
   const rawQuery = queryPair[0];
   const setQuery = queryPair[1];
+  // 面板本体，给焦点陷阱与「打开时送焦点、关闭时还焦点」用。
+  const panelRef = useRef<any>(null);
   const query = normalizeQuery(rawQuery);
   const rows = sortStash(stashView(ctx, state), mode);
   const visible: StashItem[] = [];
@@ -258,11 +254,60 @@ function StashPanel(props: StashPanelProps): any {
         event.preventDefault();
         event.stopPropagation();
         closeStash();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      // 焦点陷阱：面板是模态的（`aria-modal`），Tab 到两端就绕回来，别让焦点跑到设置弹窗后面。
+      const panel = panelRef.current as HTMLElement | null;
+      if (!panel || typeof panel.querySelectorAll !== "function") return;
+      const items = panel.querySelectorAll("button, input, [href], select, textarea, [tabindex]:not([tabindex='-1'])");
+      const focusable: HTMLElement[] = [];
+      let i;
+      for (i = 0; i < items.length; i++) {
+        const el = items[i] as HTMLElement;
+        if (el.hasAttribute("disabled") || el.getAttribute("aria-disabled") === "true") continue;
+        focusable.push(el);
+      }
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const activeEl = document.activeElement as HTMLElement | null;
+      if (event.shiftKey && (!activeEl || activeEl === first || !panel.contains(activeEl))) {
+        event.preventDefault();
+        last.focus();
+        return;
+      }
+      if (!event.shiftKey && (!activeEl || activeEl === last || !panel.contains(activeEl))) {
+        event.preventDefault();
+        first.focus();
       }
     }
     document.addEventListener("keydown", onKey, true);
     return function () {
       document.removeEventListener("keydown", onKey, true);
+    };
+  }, []);
+
+  useEffect(function () {
+    // 打开时把焦点送进面板、关掉时还给原来的元素：键盘用户否则会掉到 body 上。
+    const panel = panelRef.current as HTMLElement | null;
+    if (!panel || typeof panel.querySelectorAll !== "function") return function () {};
+    const previous = document.activeElement as HTMLElement | null;
+    const items = panel.querySelectorAll("button, input, [href], select, textarea, [tabindex]:not([tabindex='-1'])");
+    let target: HTMLElement | null = null;
+    let i;
+    for (i = 0; i < items.length; i++) {
+      const el = items[i] as HTMLElement;
+      if (el.hasAttribute("disabled") || el.getAttribute("aria-disabled") === "true") continue;
+      target = el;
+      break;
+    }
+    if (target) target.focus();
+    return function () {
+      if (previous && typeof previous.focus === "function" && previous !== document.body) previous.focus();
     };
   }, []);
 
@@ -287,18 +332,15 @@ function StashPanel(props: StashPanelProps): any {
   function open(row: StashItem): void {
     // 界面上本来点不动的行不进导航：导航会关掉收纳包与设置弹窗，等于「点了个寂寞还丢了位置」。
     if (row.missing || !row.navigable) return;
-    // 先抵达目标再关闭；设置行只存在于弹窗内，故跳过关闭，交给 `navigateTo`
+    // 设置行只存在于弹窗内，不能关弹窗：交给 `navigateTo` 的两步路由。
     if (row.scope === "settings") {
       closeStash();
       navigateTo(ctx, row.scope, row.id);
       return;
     }
-    navigateTo(ctx, row.scope, row.id);
+    // 其余行与设置页卡片同一条路径（先抵达目标，下一帧再关设置弹窗），这里只多关一次收纳包。
+    navigateFromSettings(ctx, row.scope, row.id);
     closeStash();
-    // 在下一帧（点击派发后）关掉设置弹窗
-    window.requestAnimationFrame(function () {
-      closeSettings();
-    });
   }
 
   const body: any[] = [];
@@ -307,77 +349,79 @@ function StashPanel(props: StashPanelProps): any {
   let i: number;
   let j: number;
   for (i = 0; i < groups.length; i++) {
-    (function (group: StashGroup) {
-      // 有标题的分组在标题右侧带一个「恢复本组默认」；按名称排序（alpha）没有标题，也就不放按钮、
-      // 不做折叠——没有「类」可折。
-      if (group.title) {
-        const collapsedKey = "stash:" + mode + ":" + group.key;
-        // 搜索时也照常可折叠：与设置页的卡片同一套行为。
-        const expanded = collapsedMap[collapsedKey] !== true;
-        const toggleGroup = function (): void {
-          store.update(function (next: PluginState) {
-            if (!next.options.collapsed) next.options.collapsed = {};
-            next.options.collapsed[collapsedKey] = expanded;
-          });
-        };
-        body.push(h("div", {
-          key: "g" + i,
-          className: "lo-stash-group",
-          "data-open": expanded ? "1" : "0",
-          role: "button",
-          tabIndex: 0,
-          "aria-expanded": expanded ? "true" : "false",
-          title: t("action.toggleGroup"),
-          // 整行都是折叠开关：标题、小三角与恢复按钮右侧的空白都算，只有「恢复本组默认」自己管自己。
-          onClick: function (event: any) {
-            if (event && event.target && event.target.closest && event.target.closest(".lo-btn")) return;
-            toggleGroup();
-          },
-          onKeyDown: function (event: any) {
-            if (event && (event.key === "Enter" || event.key === " ")) {
-              event.preventDefault();
-              toggleGroup();
-            }
-          }
+    const group = groups[i];
+    // 有标题的分组在标题右侧带一个「恢复本组默认」；按名称排序（alpha）没有标题，也就不放按钮、
+    // 不做折叠——没有「类」可折。
+    if (group.title) {
+      const collapsedKey = "stash:" + mode + ":" + group.key;
+      // 搜索时也照常可折叠：与设置页的卡片同一套行为。
+      const expanded = collapsedMap[collapsedKey] !== true;
+      const toggleGroup = function (): void {
+        store.update(function (next: PluginState) {
+          setCollapsed(next, collapsedKey, expanded);
+        });
+      };
+      body.push(h("div", {
+        // 用分组自己的键，不用下标：切排序方式后同一位置会换成另一个组，按下标 React 会复用
+        // 实例，那个组头里「恢复本组默认」的上膛状态就跟着搬过去，点一下恢复的是另一组。
+        key: "g:" + group.key,
+        className: "lo-stash-group",
+        "data-open": expanded ? "1" : "0",
+        role: "button",
+        tabIndex: 0,
+        "aria-expanded": expanded ? "true" : "false",
+        title: t("action.toggleGroup"),
+        // 整行都是折叠开关：标题、小三角与恢复按钮右侧的空白都算，只有「恢复本组默认」自己管自己。
+        onClick: function (event: any) {
+          if (event && event.target && event.target.closest && event.target.closest(".lo-btn")) return;
+          toggleGroup();
         },
-          h("span", { className: "lo-stash-group-title" },
-            h("span", { className: "lo-stash-group-text" }, group.title)
-          ),
-          h(ConfirmBtn, {
-            label: t("action.reset"),
-            confirmLabel: t("action.confirmResetGroup"),
-            disabled: !groupDirty(state, group),
-            onConfirm: function () {
-              store.update(function (next: PluginState) {
-                const scopes = groupScopes(group);
-                for (let k = 0; k < scopes.length; k++) resetScope(next, scopes[k]);
-              });
-            }
-          }),
-          // 小三角在整行最右端（恢复按钮之后），与设置页卡片的标题行同一位置。
-          h("span", { className: "lo-stash-group-chev", "aria-hidden": "true" }, "\u25be")
-        ));
-        if (!expanded) return;
-      }
-      for (j = 0; j < group.rows.length; j++) {
-        (function (row: StashItem) {
-          body.push(h(StashRow, {
-            key: row.key,
-            row: row,
-            onOpen: open,
-            onRestore: restore,
-            canIntoMore: moreScopeOk(row.scope),
-            onIntoMore: intoMore
-          }));
-        })(group.rows[j]);
-      }
-    })(groups[i]);
+        onKeyDown: function (event: any) {
+          // 焦点在「恢复本组默认」上时，回车 / 空格归那颗按钮，不能顺手把分组折了。
+          if (event && event.target && event.target.closest && event.target.closest(".lo-btn")) return;
+          if (event && (event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
+            toggleGroup();
+          }
+        }
+      },
+        h("span", { className: "lo-stash-group-title" },
+          h("span", { className: "lo-stash-group-text" }, group.title)
+        ),
+        h(ConfirmBtn, {
+          label: t("action.reset"),
+          confirmLabel: t("action.confirmResetGroup"),
+          disabled: !groupDirty(state, group),
+          onConfirm: function () {
+            store.update(function (next: PluginState) {
+              const scopes = groupScopes(group);
+              for (let k = 0; k < scopes.length; k++) resetScope(next, scopes[k]);
+            });
+          }
+        }),
+        // 小三角在整行最右端（恢复按钮之后），与设置页卡片的标题行同一位置。
+        h("span", { className: "lo-stash-group-chev", "aria-hidden": "true" }, "\u25be")
+      ));
+      if (!expanded) continue;
+    }
+    for (j = 0; j < group.rows.length; j++) {
+      const row = group.rows[j];
+      body.push(h(StashRow, {
+        key: row.key,
+        row: row,
+        onOpen: open,
+        onRestore: restore,
+        // 三颗「更多」入口按钮不给这个键（见 isMoreEntry）：收进自己那扇菜单就再也点不开。
+        canIntoMore: canTuckIntoMore(row.scope, row.id),
+        onIntoMore: intoMore
+      }));
+    }
   }
 
   return ReactDOM.createPortal(
     h(React.Fragment, null,
       h("div", { className: "lo-mask", onClick: closeStash }),
-      h("div", { className: "lo-stash", role: "dialog", "aria-label": t("stash.title") },
+      h("div", { className: "lo-stash", role: "dialog", "aria-modal": "true", "aria-label": t("stash.title"), ref: panelRef },
         h("div", { className: "lo-stash-head" },
           h("span", { className: "lo-stash-title" }, t("stash.title")),
           h("span", { className: "lo-stash-count" }, t("stash.count").replace("{count}", query ? visible.length + " / " + rows.length : String(rows.length))),
@@ -470,11 +514,10 @@ function closeStash(): void {
 /**
  * 启动器吸附到一侧并保留垂直偏移；不做垂直吸附。
  *
- * @param props 上下文与状态句柄，见 StashLauncherProps。
+ * @param props 上下文与状态句柄，见 StashProps。
  * @returns 启动器按钮，`count > 0` 时带数量角标；`options.showStashLauncher` 为 false 时不渲染。
  */
-function StashLauncher(props: StashLauncherProps): any {
-  const ctx = props.ctx;
+function StashLauncher(props: StashProps): any {
   const store = props.store;
   useStoreTick(store);
   const state = store.get();
@@ -487,9 +530,23 @@ function StashLauncher(props: StashLauncherProps): any {
   const dragRef = useRef<any>(null);
   // 拖动期间把 style 写入合并到一帧一次的句柄。
   const frameRef = useRef(0);
-  const tickPair = useState(0);
-  const tick = tickPair[0];
-  const setTick = tickPair[1];
+  // 指针捕获不一定成功（宿主页面里 pointerId 失效、或浏览器拒绝），所以松手也认 window 上的
+  // 那一份：指针在按钮外面松开时若只靠按钮自己的 onPointerUp，dragRef 会一直挂着，
+  // 之后光是划过启动器就会把它拖走。
+  const finishRef = useRef<any>(null);
+  const setTick = useState(0)[1];
+
+  useEffect(function () {
+    function onWindowUp(event: any) {
+      if (finishRef.current) finishRef.current(event);
+    }
+    window.addEventListener("pointerup", onWindowUp, true);
+    window.addEventListener("pointercancel", onWindowUp, true);
+    return function () {
+      window.removeEventListener("pointerup", onWindowUp, true);
+      window.removeEventListener("pointercancel", onWindowUp, true);
+    };
+  }, []);
 
   useEffect(function () {
     function onResize() {
@@ -503,6 +560,7 @@ function StashLauncher(props: StashLauncherProps): any {
     };
   }, []);
 
+  // 尺寸变了才写回：依赖里只放当前尺寸，读到的几何量一变就会重跑一次，不会每帧都强制布局。
   useEffect(function () {
     if (ref.current) {
       const rect = ref.current.getBoundingClientRect();
@@ -510,7 +568,7 @@ function StashLauncher(props: StashLauncherProps): any {
         setSize({ width: rect.width, height: rect.height });
       }
     }
-  });
+  }, [size.width, size.height]);
 
   // 组件卸载时不要留下一个已经排队的帧。
   useEffect(function () {
@@ -524,19 +582,16 @@ function StashLauncher(props: StashLauncherProps): any {
 
   if (state.options.showStashLauncher === false) return null;
 
-  const side = state.options.launcherSide === "left" ? "left" : "right";
+  const side = state.options.launcherSide === LAUNCHER_SIDE_LEFT ? LAUNCHER_SIDE_LEFT : LAUNCHER_SIDE_RIGHT;
   const width = size.width || 120;
   const height = size.height || 32;
-  // 拖动前 `launcherY` 为 null；断言在构建时擦除，`clampLauncherY` 对 null 处理不变。
-  const y = clampLauncherY(state.options.launcherY as number, height);
-  // 仅拖动中有 `launcherX`：按住时横向跟手，松手清空并按所在半边贴左/贴右。
-  const liveX = state.options.launcherX;
-  const dragged = typeof liveX === "number" && isFinite(liveX);
-  const x = dragged
-    ? clampLauncherX(liveX as number, width)
-    : side === "left"
-      ? LAUNCHER_MARGIN
-      : Math.max(LAUNCHER_MARGIN, window.innerWidth - width - LAUNCHER_MARGIN);
+  // 拖动前 `launcherY` 为 null；`clampLauncherY` 自己就接 null（读成 0 再夹到边距内），不必断言。
+  const rawY = state.options.launcherY;
+  const y = clampLauncherY(typeof rawY === "number" && isFinite(rawY) ? rawY : null, height);
+  // 拖动中的横向跟手只落在手势状态里（见 `onPointerMove`）：这里按松手后定下的半边贴靠。
+  const x = side === LAUNCHER_SIDE_LEFT
+    ? LAUNCHER_MARGIN
+    : Math.max(LAUNCHER_MARGIN, window.innerWidth - width - LAUNCHER_MARGIN);
 
   function onPointerDown(event: any): void {
     if (event.button !== undefined && event.button !== 0) return;
@@ -593,35 +648,31 @@ function StashLauncher(props: StashLauncherProps): any {
     }
     if (!drag) return;
     if (drag.moved) {
-      // 松手才定边：指针在窗口左半边贴左、右半边贴右；同时清掉 `launcherX`。
-      const nextSide = event.clientX < window.innerWidth / 2 ? "left" : "right";
+      // 松手才定边：指针在窗口左半边贴左、右半边贴右。
+      const nextSide = event.clientX < window.innerWidth / 2 ? LAUNCHER_SIDE_LEFT : LAUNCHER_SIDE_RIGHT;
       // 拖动期间位置直写元素、React 看不到，按渲染时同样的算法再写一次最终位置
       const node = ref.current;
       if (node) {
         node.style.left =
-          Math.round(nextSide === "left" ? LAUNCHER_MARGIN : Math.max(LAUNCHER_MARGIN, window.innerWidth - drag.width - LAUNCHER_MARGIN)) + "px";
+          Math.round(nextSide === LAUNCHER_SIDE_LEFT ? LAUNCHER_MARGIN : Math.max(LAUNCHER_MARGIN, window.innerWidth - drag.width - LAUNCHER_MARGIN)) + "px";
         node.style.top = Math.round(drag.y) + "px";
       }
       store.update(function (state2: PluginState) {
         state2.options.launcherSide = nextSide;
-        state2.options.launcherX = null;
         state2.options.launcherY = drag.y;
       });
     } else {
-      if (state.options.launcherX !== null) {
-        store.update(function (state2: PluginState) {
-          state2.options.launcherX = null;
-        });
-      }
       openStash();
     }
   }
+
+  // 给 window 上那份松手处理留最新的入口（渲染期写 ref，卸载后自然失效）。
+  finishRef.current = onPointerUp;
 
   return h("button", {
     type: "button",
     ref: ref,
     className: "lo-launcher",
-    "data-dragging": dragRef.current ? "1" : undefined,
     // 不要 `title`：原生 tooltip 会在拖动时弹出来挡在按钮上。名字交给 `aria-label`。
     "aria-label": t("stash.launcher"),
     style: { left: Math.round(x) + "px", top: Math.round(y) + "px" },
@@ -640,10 +691,10 @@ function StashLauncher(props: StashLauncherProps): any {
 /**
  * portal 画进 <body>：官方浮层 z-index:20 的层叠上下文会把 slot 子元素压在设置弹窗(1000)之下
  *
- * @param props 上下文与状态句柄，见 StashSurfaceProps。
+ * @param props 上下文与状态句柄，见 StashProps。
  * @returns 启动器与（收纳包打开时的）面板，经 createPortal 挂到 body 上。
  */
-function StashSurface(props: StashSurfaceProps): any {
+function StashSurface(props: StashProps): any {
   const pair = useState(stashFlag.get());
   const open = pair[0];
   const setOpen = pair[1];

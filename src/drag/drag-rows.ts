@@ -1,6 +1,3 @@
-const LO_DRAG_THRESHOLD = 4;
-const LO_CLICK_SUPPRESS_MS = 300;
-
 // 手势进行中时置位；投影检查它，拖动中不重绘
 let loDragActive = false;
 
@@ -56,11 +53,20 @@ function groupOfEl(el: HTMLElement): string {
   return el.getAttribute(MARKS.kind) === "official" ? "official" : "third";
 }
 
-function rectsOf(rows: HTMLElement[], axis: string): DragRowRect[] {
+/**
+ * 量出一组行的矩形，顺手算好当前轴向上的中点。
+ *
+ * @param rows 要量的行，顺序即视觉顺序。
+ * @param axis 轴向：`x` 取横向中点、其余取纵向。
+ * @param idAttr 行身份的属性名；设置页与收纳包的行不用 `MARKS.id`，由调用方指定。
+ * @returns 与 `rows` 一一对应的矩形。
+ */
+function rectsOf(rows: HTMLElement[], axis: string, idAttr?: string): DragRowRect[] {
+  const attr = idAttr || MARKS.id;
   const out: DragRowRect[] = [];
   for (let i = 0; i < rows.length; i++) {
     const rect = rows[i].getBoundingClientRect();
-    const id = rows[i].getAttribute(MARKS.id) || "";
+    const id = rows[i].getAttribute(attr) || "";
     out.push({
       el: rows[i],
       id: id,
@@ -117,12 +123,11 @@ function previewGroup(scope: string, group: string, sequence: HTMLElement[], mix
  * 落点表示成 `rects` 的下标；传入的是不含被拖行的组，结果就是 splice 位置，`dragged` 防护兼顾传完整列表的调用方。
  *
  * @param rects 参与插入点计算的行矩形。
- * @param axis 轴向；本函数不读取，`mid` 已由 `rectsOf` 按轴向算好。
  * @param pointer 指针在当前轴上的坐标。
  * @param dragged 被拖行的 id；命中时跳过该行，不计数。
  * @returns splice 位置：`pointer` 越过的行数。
  */
-function insertionIndex(rects: DragRowRect[], axis: string, pointer: number, dragged: string): number {
+function insertionIndex(rects: DragRowRect[], pointer: number, dragged: string): number {
   let index = 0;
   for (let i = 0; i < rects.length; i++) {
     if (rects[i].id === dragged) continue;
@@ -138,12 +143,17 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
   let id = "";
   let group = "";
   let axis = "y";
-  let rects: DragRowRect[] = [];
   let sequence: HTMLElement[] = [];
   let draggedEl: HTMLElement | null = null;
   let suppressClickUntil = 0;
   // 指针在当前轴上的最近一次坐标。滚动时指针没动、矩形全变了，预览要拿它重算一次。
   let lastPointer = 0;
+  // 另一个轴的坐标，以及两个落点的命中状态：拖到「更多」入口上松手是收进「更多」（用户 m04058），
+  // 拖到悬浮框启动器上松手是收起（用户 m04359，优先于「更多」）。
+  let lastX = 0;
+  let lastY = 0;
+  const moreSlot = createDropSlot(MARKS.over);
+  const stashSlot = createDropSlot(DROP_MARK);
   // 一帧最多重算一次（规则在 drag-frame.ts）。
   const throttle = createFrameThrottle(function (pointer: number): void {
     if (active && draggedEl) applyAt(pointer);
@@ -177,20 +187,53 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
    */
   function groupRows(): HTMLElement[] {
     const all = visualRows(scope);
-    if (mixedOrder(store.get())) return all;
-    if (group === "all") return all;
-    const mine: HTMLElement[] = [];
+    const out: HTMLElement[] = [];
+    const mixed = mixedOrder(store.get());
     for (let i = 0; i < all.length; i++) {
-      if (groupOfEl(all[i]) === group) mine.push(all[i]);
+      // 「更多」入口钉在末尾、不参与换位：它既不是落点候选，也不进预览序列（见 isMoreEntry）。
+      if (isMoreEntry(scope, all[i].getAttribute(MARKS.id) || "")) continue;
+      if (mixed || group === "all" || groupOfEl(all[i]) === group) out.push(all[i]);
     }
-    return mine;
+    return out;
+  }
+
+  /**
+   * 拖这一处的行时，哪一处槽位上的「更多」入口能接住它。
+   *
+   * 侧边栏底部与输入框下方都没有自己的「更多」入口：它们分别归侧边栏那扇与对话那扇菜单
+   * （见 `MORE_SCOPE_HOME`），入口画在侧边栏顶部与对话标签条上，所以落点要跨槽位找。
+   *
+   * @returns 承载这颗入口的槽位 key。
+   */
+  function moreEntryScope(): string {
+    const region = moreRegionOf(scope);
+    if (region === "conversation") return "tabs";
+    if (region === "rightbar") return "right";
+    return "sidebar";
+  }
+
+  /**
+   * 指针落在哪颗「更多」入口上——落在上面松手就是把这行收进「更多」。
+   *
+   * @param x 指针横坐标。
+   * @param y 指针纵坐标。
+   * @returns 命中的「更多」入口元素；不在任何一颗上时为 null。
+   */
+  function pinnedRowAt(x: number, y: number): HTMLElement | null {
+    // 设置页导航没有「更多」可进（`MORE_SCOPES` 里没有它），拖到哪儿都不点亮。
+    if (MORE_SCOPES.indexOf(scope) < 0) return null;
+    const entry = moreEntryScope();
+    const selector = "[" + MARKS.scope + '="' + entry + '"][' + MARKS.row + "][" + MARKS.id + '="' + MORE_ID + '"]';
+    return firstRectHit(document.querySelectorAll(selector), x, y, function (el) {
+      return !el.hasAttribute(MARKS.hidden);
+    });
   }
 
   /**
    * `begin` 时拍一次快照：该组在拖动开始那一刻的顺序，含被拖那一行；`finish` 拿它当基准把预览序列并回 scope 的完整 id 顺序。
    */
   function snapshotGroup(): void {
-    rects = rectsOf(groupRows(), axis);
+    const rects = rectsOf(groupRows(), axis);
     sequence = rects.map(function (rect) {
       return rect.el;
     });
@@ -212,13 +255,17 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
 
   function begin(event: PointerEvent, row: HTMLElement): void {
     active = true;
-    loDragActive = true;
+    setDragActive(true);
     scope = row.getAttribute(MARKS.scope) || "";
     id = row.getAttribute(MARKS.id) || "";
     // 组取自行上的 kind 标记（投影写死的），不用 mixedOrder 覆盖。
     group = groupOfEl(row);
     draggedEl = row;
     axis = containerAxis(row, scope);
+    lastX = event.clientX;
+    lastY = event.clientY;
+    moreSlot.clear();
+    stashSlot.clear();
     row.setAttribute(MARKS.dragging, "1");
     snapshotGroup();
     document.body.style.cursor = "grabbing";
@@ -227,6 +274,8 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
 
   function update(event: PointerEvent): void {
     if (!draggedEl) return;
+    lastX = event.clientX;
+    lastY = event.clientY;
     lastPointer = axis === "x" ? event.clientX : event.clientY;
     // 一帧最多重算一次，逐次测量会拖垮主线程。
     throttle.schedule(lastPointer);
@@ -247,9 +296,23 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
   function applyAt(pointer: number): void {
     if (!draggedEl) return;
 
+    // 拖到悬浮框上：松手就是收起这一行（用户 m04359）。设置页的行还可以拖到本插件的页面上收起
+    // （用户 m05013）。它比「更多」入口更重，先判它。
+    const stashHit =
+      stashDropAt(lastX, lastY) || (scope === "settings" ? pluginPageAt(lastX, lastY) : null);
+    stashSlot.sync(stashHit);
+    if (stashHit) {
+      // 落在启动器上时不预览换位，「更多」入口的高亮也一并撤掉。
+      moreSlot.clear();
+      return;
+    }
+
+    // 拖到「更多」入口上：不预览换位，只把那一行点亮；松手时按收进「更多」提交。
+    moreSlot.sync(pinnedRowAt(lastX, lastY));
+    if (moreSlot.hit()) return;
+
     const live = measureRects();
-    rects = live;
-    const at = insertionIndex(live, axis, pointer, id);
+    const at = insertionIndex(live, pointer, id);
 
     const next: HTMLElement[] = [];
     for (let i = 0; i < live.length; i++) next.push(live[i].el);
@@ -270,9 +333,14 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
     // realId / 被拖行 id / 落点下标必须在 cleanup() 之前取走：cleanup 会清空 sequence、id、draggedEl。
     const hasRealId = ids.length > 0 && ids.every(function (value) { return value !== ""; });
     const draggedId = id;
+    // 落在「更多」入口上：这一拖不是换位，是把这行收进「更多」。
+    const dropIntoMore = moreSlot.hit() !== null;
+    // 落在悬浮框上：这一拖是收起，优先级高于「更多」（用户 m04359）。
+    const dropStash = stashSlot.hit() !== null;
     // 尾随的 click 属于拖动要吞掉；截止时刻在 finish 武装。
     suppressClickUntil = Date.now() + LO_CLICK_SUPPRESS_MS;
     cleanup();
+    if (commitStashOrMore(store, finalScope, draggedId, dropIntoMore, dropStash)) return;
     if (!hasRealId) return;
     // 顺序即落点：直接用松手那一刻的预览序列当真值，不回屏读 style.order——预览只重排过部分槽位，读回可能撞值或倒序。
     const next: string[] = [];
@@ -294,12 +362,7 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
       }
     }
     // 兜底：`order` 里有、屏上却没有的 id（隐藏行不排 order）也留住，排在末尾不影响已排好的顺序。
-    let savedIds: string[] = [];
-    try {
-      savedIds = (store.get().order[finalScope] || []).slice();
-    } catch (err) {
-      savedIds = [];
-    }
+    const savedIds: string[] = (store.get().order[finalScope] || []).slice();
     for (let i = 0; i < savedIds.length; i++) {
       if (next.indexOf(savedIds[i]) >= 0) continue;
       next.push(savedIds[i]);
@@ -315,14 +378,14 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
       draggedEl.removeAttribute(MARKS.dragging);
       // 收手时擦掉可能残留的落点标记。
       draggedEl.removeAttribute(MARKS.over);
-      draggedEl.removeAttribute(MARKS.overActive);
     }
+    moreSlot.clear();
+    stashSlot.clear();
     document.body.style.cursor = "";
     pending = null;
     active = false;
-    loDragActive = false;
+    setDragActive(false);
     draggedEl = null;
-    rects = [];
     sequence = [];
   }
 
@@ -333,9 +396,6 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
     if (!row) return;
     pending = {
       row: row,
-      scope: row.getAttribute(MARKS.scope) || "",
-      id: row.getAttribute(MARKS.id) || "",
-      group: groupOfEl(row),
       x: event.clientX,
       y: event.clientY
     };
@@ -356,9 +416,20 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
     update(event);
   }
 
-  function onUp(): void {
-    if (active) finish();
-    else cleanup();
+  function onUp(event: PointerEvent): void {
+    if (active) {
+      // 松手点可能和最后一次 pointermove 不同（指针一甩就抬）：按松手坐标补算一次，
+      // 否则落点按旧位置判，拖到「更多」/ 悬浮框上会被漏掉。
+      lastX = event.clientX;
+      lastY = event.clientY;
+      lastPointer = axis === "x" ? event.clientX : event.clientY;
+      // 先丢掉积压帧再补算：留着它会在 finish 里用旧坐标把预览覆盖回去。
+      throttle.drop();
+      applyAt(lastPointer);
+      finish();
+    } else {
+      cleanup();
+    }
   }
 
   function onCancel(): void {
@@ -383,10 +454,8 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
   }
 
   function onClickCapture(event: MouseEvent): void {
-    if (Date.now() < suppressClickUntil) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
+    // 吞掉跟手的那一下 click 后就归零：否则在这个时间窗里用户自己点别的行也会被吞掉。
+    if (swallowClick(event, suppressClickUntil)) suppressClickUntil = 0;
   }
 
   let detachEvents: (() => void) | null = null;

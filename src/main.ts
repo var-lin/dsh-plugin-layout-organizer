@@ -29,19 +29,26 @@ function injectMoreSlot(
           order: 40,
           locale: NS
         },
-        function MoreRows(props: { onDismiss?: () => void }) {
+        function MoreRows(props: { onDismiss?: () => void; onOpen?: unknown; entries?: unknown }) {
           // 菜单内容炸掉只该让菜单空着，不该让宿主那处槽位整块报错。
+          //
+          // 宿主交下来的属性必须原样转发：对话页那扇菜单的 `onOpen`（标签条自己的
+          // `selectView`）与 `entries`（它因宽度不够自动收起的标签）都只能从这里到手；
+          // 少转发一个，标签被挤出标签条后菜单行点不动、重复行也不会去重（用户 m00655 / m00878）。
+          const host = props ? props : {};
           return h(Boundary, null, h(MoreMenuContent, {
             loCtx: ctx,
             loStore: store,
             loRegion: region,
-            onDismiss: props ? props.onDismiss : undefined
+            onDismiss: host.onDismiss,
+            onOpen: host.onOpen,
+            entries: host.entries
           }));
         }
       );
     });
   } catch (err) {
-    noteDegrade(slot + " unavailable; rows cannot be tucked into More: " + (err && (err as Error).message ? (err as Error).message : String(err)));
+    noteDegrade(slot + " unavailable; rows cannot be tucked into More: " + errText(err));
   }
 }
 
@@ -68,7 +75,7 @@ function apply(ctx: CtxLike): void {
   try {
     boot();
   } catch (err) {
-    noteDegrade("startup failed: " + (err && (err as Error).message ? (err as Error).message : String(err)));
+    noteDegrade("startup failed: " + errText(err));
   }
 
   function boot(): void {
@@ -107,11 +114,13 @@ function apply(ctx: CtxLike): void {
 
   const store = createStore();
   setActiveStore(store);
+  setActiveContext(ctx);
   const organizer = createOrganizer(ctx, store, function (where: string, err: unknown): void {
-    noteDegrade(where + ": " + (err && (err as Error).message ? (err as Error).message : String(err)));
+    noteDegrade(where + ": " + errText(err));
   });
   const drag = createDragController(store);
   const listDrag = createListDragController(store);
+  const stashDrag = createStashDragController(store);
 
   ctx.effect(function () {
     // 行菜单是窗口级捕获监听器，所以它一次覆盖所有 scope——包括从未打过标记的行。
@@ -119,13 +128,16 @@ function apply(ctx: CtxLike): void {
     organizer.start();
     drag.attach();
     listDrag.attach();
+    stashDrag.attach();
     return function () {
+      stashDrag.detach();
       listDrag.detach();
       drag.detach();
       organizer.stop();
       uninstallRowMenu();
       removeSurfaces();
       setActiveStore(null);
+      setActiveContext(null);
     };
   }, "layout-organizer: projection");
 
@@ -144,26 +156,35 @@ function apply(ctx: CtxLike): void {
       );
     });
   } catch (err) {
-    noteDegrade("shell.overlay unavailable; the stash cannot be shown: " + (err && (err as Error).message ? (err as Error).message : String(err)));
+    noteDegrade("shell.overlay unavailable; the stash cannot be shown: " + errText(err));
   }
 
   // 「更多」菜单里列出被收进「更多」的行。这一项是我们的独有内容：注册之后
   // 宿主才会为这个槽位点亮「更多」按钮（host 侧 `hasEntryActions` 就是看这个 list 非空），
   // 所以老宿主缺这个槽位时整块跳过，而不是让「更多」凭空出现又空着。
   //
-  // 三处「更多」共用同一份内容：左侧栏的「更多」、右侧栏「开始」页的「更多工具」、对话顶部的
-  // 「…」各是一个槽位，组件按宿主传进来的 `region` 决定读哪一份清单（见 moreScopesIn）。
-  // 右侧栏那处单列一个归属：它永远列全部收进来的按钮，「分开收纳」开关对它无效。
+  // 三处「更多」各读各的清单：左侧栏的「更多」、右侧栏「开始」页的「更多工具」、对话顶部的
+  // 「…」各是一个槽位，组件按宿主传进来的 `region` 决定读哪一份（见 moreScopesIn）。
+  // 「分开收纳」打开时三处按 MORE_SCOPE_HOME 分流，关闭时三处共用一份清单。
   const moreSlots: Array<{ slot: string; region: string }> = [
     { slot: "sidebar.panellist.actions", region: "sidebar" },
-    { slot: "sidebar.right.tab.guide.actions", region: MORE_REGION_ALL },
+    { slot: "sidebar.right.tab.guide.actions", region: MORE_REGION_RIGHT },
     { slot: "conversation.session.header.views.actions", region: "conversation" }
   ];
   for (let slotAt = 0; slotAt < moreSlots.length; slotAt++) {
     const target = moreSlots[slotAt];
-    // 闭包变量：循环体里不可用 let 以外的名字，否则最后一个槽位的 region 会串到前一处。
-    const region = target.region;
-    injectMoreSlot(ctx, store, target.slot, region, noteDegrade);
+    injectMoreSlot(ctx, store, target.slot, target.region, noteDegrade);
+  }
+
+  // 设置页要挂两处（设置窗口的左侧分页、插件管理页的详情区），两处内容一字不差：
+  // 抽成一处，免得改样式或加降级说明时只改了一半。
+  function settingsSurface(): any {
+    return h(Boundary, null, h(SettingsPage, {
+      ctx: ctx,
+      store: store,
+      degraded: degraded,
+      onOpenStash: openStash
+    }));
   }
 
   try {
@@ -179,45 +200,35 @@ function apply(ctx: CtxLike): void {
           locale: NS
         },
         function SettingsSection() {
-          return h(Boundary, null, h(SettingsPage, {
-            ctx: ctx,
-            store: store,
-            degraded: degraded,
-            onOpenStash: openStash
-          }));
+          return settingsSurface();
         }
       );
     });
   } catch (err) {
-    noteDegrade("settings.section unavailable; the settings page cannot be reached: " + (err && (err as Error).message ? (err as Error).message : String(err)));
+    noteDegrade("settings.section unavailable; the settings page cannot be reached: " + errText(err));
   }
 
   // 插件管理页的详情区也挂一份设置页；主题不是本插件时不渲染。
   try {
     ctx.slots.inject("plugins.detail.section", function () {
-    return ctx.slots.register(
-      {
-        name: "plugins.detail.section",
-        id: SELF_ID,
-        order: 10,
-        locale: NS
-      },
-      function PluginDetailSection(props: { subject?: { kind?: string; id?: string; pkg?: { name?: string } } }) {
-        const subject = props ? props.subject : null;
-        if (!subject) return null;
-        const name = subject.pkg && subject.pkg.name ? subject.pkg.name : subject.id ? subject.id : "";
-        if (name !== PLUGIN_ID && name !== SELF_ID) return null;
-        return h(Boundary, null, h(SettingsPage, {
-          ctx: ctx,
-          store: store,
-          degraded: degraded,
-          onOpenStash: openStash
-        }));
-      }
-    );
+      return ctx.slots.register(
+        {
+          name: "plugins.detail.section",
+          id: SELF_ID,
+          order: 10,
+          locale: NS
+        },
+        function PluginDetailSection(props: { subject?: { kind?: string; id?: string; pkg?: { name?: string } } }) {
+          const subject = props ? props.subject : null;
+          if (!subject) return null;
+          const name = subject.pkg && subject.pkg.name ? subject.pkg.name : subject.id ? subject.id : "";
+          if (name !== PLUGIN_ID && name !== SELF_ID) return null;
+          return settingsSurface();
+        }
+      );
     });
   } catch (err) {
-    noteDegrade("plugins.detail.section unavailable; the plugin detail page has no settings: " + (err && (err as Error).message ? (err as Error).message : String(err)));
+    noteDegrade("plugins.detail.section unavailable; the plugin detail page has no settings: " + errText(err));
   }
 
   // shortcuts 惰性重试；注册须在 ctx.effect 内，避免重跑 apply() 时重复注册。
@@ -287,7 +298,7 @@ function apply(ctx: CtxLike): void {
         if (typeof dispose === "function") disposeCommand = dispose;
       } catch (err) {
         // 重复 id 是预期且无害的，忽略；其余拒绝都上报为降级。
-        const message = err && (err as Error).message ? (err as Error).message : String(err);
+        const message = errText(err);
         if (message.indexOf("Duplicate shortcut command: " + SHORTCUT_ID) >= 0) return;
         noteDegrade("shortcut registration failed (likely a keybinding conflict): " + message);
       }

@@ -6,7 +6,7 @@
  *
  *   node build.mjs
  */
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync, mkdirSync, readdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { stripTypeScriptTypes } from "node:module";
@@ -26,6 +26,10 @@ const BUILD_ORDER = [
   "shared/icons.ts",
   "shared/locale.ts",
   "core/store.ts",
+  // 悬浮启动器的几何与命中：只依赖 constants.ts，排在 dom-rows.ts 之前
+  "core/launcher-geom.ts",
+  // 台账配对与投影记忆：要排在使用它的 dom-rows.ts 与 dom-project.ts 之前
+  "core/dom-ledger.ts",
   // 插件图标兜底：要 notifyRevision（store.ts），也要排在使用它的 dom-rows.ts 之前
   "core/dom-rows.ts",
   "core/dom-line.ts",
@@ -33,10 +37,11 @@ const BUILD_ORDER = [
   "core/dom-project.ts",
   "core/dom-navigate.ts",
   "core/organizer.ts",
-  // 两个拖拽控制器共用的手势管线，排在它们之前
+  // 三个拖拽控制器共用的手势管线，排在它们之前
   "drag/drag-frame.ts",
   "drag/drag-rows.ts",
   "drag/drag-list.ts",
+  "drag/drag-stash.ts",
   "ui/styles.ts",
   "ui/kit.ts",
   "ui/search.ts",
@@ -127,8 +132,25 @@ const iconsSource = readFileSync(join(srcDir, "shared/icons.ts"), "utf8");
 if (!/"@@svg:[^"]+@@"/.test(iconsSource)) fail("src/shared/icons.ts carries no @@svg:…@@ placeholder");
 if (/MENU_ICON_[A-Z]+\s*=\s*["']<svg/.test(iconsSource)) fail("src/shared/icons.ts embeds hand-written SVG");
 
+// `BUILD_ORDER` 是模块图，漏列的 .ts 既不会被打进产物也不会报错——这里反查一遍。
+function listSources(dir, prefix) {
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) out.push(...listSources(join(dir, entry.name), rel));
+    else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".d.ts")) out.push(rel);
+  }
+  return out;
+}
+const unlisted = listSources(srcDir, "").filter((rel) => BUILD_ORDER.indexOf(rel) < 0);
+if (unlisted.length > 0) fail(`source file(s) missing from BUILD_ORDER:\n  ${unlisted.join("\n  ")}`);
+
 const modules = BUILD_ORDER.map((rel) => {
-  const source = inlineSvgs(rel, readFileSync(join(srcDir, rel), "utf8"));
+  const raw = readFileSync(join(srcDir, rel), "utf8");
+  // 手写的 <svg> 绕过了归一化（颜色/尺寸/aria 都会漏），一律要求写成 `@@svg:` 占位符。
+  // 只认引号开头的那种：注释里用反引号提到 `<svg>` 是正常的。
+  if (/(["'])\s*<svg\b/.test(raw)) fail(`src/${rel} embeds hand-written <svg>; use a @@svg:…@@ placeholder`);
+  const source = inlineSvgs(rel, raw);
   // 首次调用时 Node 会抛一条 ExperimentalWarning，这里先静音，让构建日志保持可读。
   const originalEmit = process.emitWarning;
   let code;
@@ -156,8 +178,6 @@ window.__ModuleLoader__.load({
     var useState = React.useState;
     var useEffect = React.useEffect;
     var useRef = React.useRef;
-    var useMemo = React.useMemo;
-    var useCallback = React.useCallback;
 
 `;
 const tail = `
@@ -168,6 +188,9 @@ const tail = `
 
 const output = head + body + tail;
 mkdirSync(dirname(outFile), { recursive: true });
-writeFileSync(outFile, output, "utf8");
+// 先写临时文件再改名：构建中途失败不该把上一次的可用产物截成半截。
+const tmpFile = outFile + ".tmp";
+writeFileSync(tmpFile, output, "utf8");
+renameSync(tmpFile, outFile);
 console.log(`built ${outFile} (${output.length} bytes) from ${modules.length} modules:`);
 for (const { rel } of modules) console.log(`  src/${rel}`);

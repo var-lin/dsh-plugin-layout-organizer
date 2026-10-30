@@ -4,7 +4,9 @@ const ICON_SVG = "@@svg:layout.svg@16@@";
 function applySelfIcon(el: HTMLElement): void {
   const holder = el.querySelector("[class*='navIcon']") as HTMLElement | null;
   if (!holder) return;
-  if (holder.getAttribute("data-lo-icon") === "1") return;
+  // 属性还在不代表图标还在：宿主重渲染 navIcon 的 innerHTML 后属性会留下、图标却被换回去，
+  // 只认属性就会让设置行再也补不上图标。svg 还在才算已经贴过。
+  if (holder.getAttribute("data-lo-icon") === "1" && holder.querySelector("svg")) return;
   if (holder.getAttribute("data-lo-original") === null) {
     holder.setAttribute("data-lo-original", holder.innerHTML);
   }
@@ -29,6 +31,36 @@ function clearMarks(el: HTMLElement | null): void {
 }
 
 /**
+ * 只在值真的变了才写属性。
+ *
+ * 投影跑得很勤：宿主任意一处 childList 变动（流式输出、弹层挂载、切页）都会排一帧，
+ * 一秒几十遍是常态。若每遍都先擦后写，受管的宿主行每轮要吃十几次属性变更——宿主的
+ * 悬停提示、测量逻辑盯着行属性就会被反复唤醒，鼠标停在按钮上时提示文字会闪。
+ * 值没变就一个字节都不写，投影对宿主 DOM 才是幂等的。
+ *
+ * @param el 目标元素。
+ * @param name 属性名。
+ * @param value 期望值；传 null 表示这个属性不该存在。
+ */
+function setMark(el: HTMLElement, name: string, value: string | null): void {
+  if (value === null) {
+    if (el.hasAttribute(name)) el.removeAttribute(name);
+    return;
+  }
+  if (el.getAttribute(name) !== value) el.setAttribute(name, value);
+}
+
+/**
+ * 只在值真的变了才写 `style.order`（同 `setMark`，少一次样式失效）。
+ *
+ * @param el 目标元素。
+ * @param value 期望的 order 值；空字符串表示还原成默认排序。
+ */
+function setOrder(el: HTMLElement, value: string): void {
+  if (el.style.order !== value) el.style.order = value;
+}
+
+/**
  * 判断 id 是否为合成行。
  *
  * 没有台账记录认领的行也必须拿到排在受管行之后的 order，否则按默认 order: 0 浮到最前面。
@@ -43,22 +75,20 @@ function isSynthetic(scope: string, id: string): boolean {
 }
 
 /**
- * 给一行取显示名：台账文案优先，其次认领钩子里声明的名字，最后退回 id。
+ * 判断这一行是不是「更多」那扇菜单自己的入口。
+ *
+ * 三处「更多」（左侧栏、对话标签条、右侧边栏「更多工具」）都是打开菜单的那颗按钮：
+ * 把它收进它自己那扇菜单里，菜单就再也点不开了。所以「进更多」这个动作对它们一律不提供。
+ *
+ * 注意别拿 `isSynthetic` 当这个判据：合成的行里还有输入框下方的用量百分比
+ * （`composer:context-meter`），它不是任何菜单的入口，该收进「更多」就收。
  *
  * @param scope scope 键。
  * @param id 行 id。
- * @param label 台账文案；没有时传空字符串。
- * @returns 该行在设置页与收纳包里显示的名字。
+ * @returns 是「更多」入口时为真。
  */
-function displayLabel(scope: string, id: string, label: string): string {
-  if (label) return label;
-  // 插件指定的名字优先于钩子文案与屏幕上的动态读数（药丸上写的是数字，不是名字）。
-  const named = rowLabelOf(scope, id);
-  if (named) return named;
-  const hooked = hookLabel(scope, id);
-  if (hooked) return hooked;
-  const live = liveRowLabel(scope, id);
-  return live || id;
+function isMoreEntry(scope: string, id: string): boolean {
+  return id === MORE_ID && (scope === "sidebar" || scope === "tabs" || scope === "right");
 }
 
 /**
@@ -100,7 +130,7 @@ function claimedPairs(pairs: Pair[], el: HTMLElement): boolean {
   return false;
 }
 
-function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): ScopeResult {
+function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): void {
   const state = store.get();
   const entries = readEntries(ctx, scope);
   const units = collectRowUnits(scope);
@@ -108,7 +138,7 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): ScopeResul
   if (!units) {
     hideDivider(scope);
     setLiveRows(scope, null);
-    return { mounted: false, official: 0, third: 0 };
+    return;
   }
 
   // 合成行从一开始就带 id，和台账记录一样参与排序与隐藏。
@@ -131,11 +161,9 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): ScopeResul
 
   // 台账只和「非合成」的行配对：合成元素已带自己的 id。
   const slotRows: HTMLElement[] = [];
-  const slotIds: string[] = [];
   for (let i = 0; i < units.length; i++) {
     if (syntheticIds[i]) continue;
     slotRows.push(units[i].el);
-    slotIds.push("");
   }
   const entryList: LedgerEntry[] = [];
   for (let i = 0; i < ordered.length; i++) {
@@ -143,7 +171,7 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): ScopeResul
     if (isSynthetic(scope, id)) continue;
     const entry = byId[id];
     // `hasLabel` 只有台账真给了文案才为真；没给时 `label` 是 id 兜底（见 `pairRows`）。
-    entryList.push({ id: id, label: entry ? entry.label : id, hasLabel: entry ? entry.hasLabel : false, order: entry ? entry.order : 0 });
+    entryList.push({ id: id, label: entry ? entry.label : id, hasLabel: entry ? entry.hasLabel : false });
   }
   // 行身上现存的标记就是上次的身份，先按它认领，位置配对只留给新元素。
   const stamped: Record<string, HTMLElement> = {};
@@ -164,12 +192,32 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): ScopeResul
     extraUnits.push({ el: units[i].el, id: id });
   }
 
+  // 三颗「更多」入口永远收在最后：它们是打开菜单的按钮，跟着列表排没有意义（见 isMoreEntry）。
+  // 放在「未认领行按 DOM 派生 id 追加」之后：那些行是这一轮才出现的，先钉再追加会让钉住失效。
+  for (let i = ordered.length - 1; i >= 0; i--) {
+    if (!isMoreEntry(scope, ordered[i])) continue;
+    const pinnedId = ordered.splice(i, 1)[0];
+    ordered.push(pinnedId);
+  }
+
   const claimed: HTMLElement[] = [];
   const visible: Record<string, { id: string; el: HTMLElement }[]> = { official: [], third: [] };
   // 本轮真正落到屏幕上的行：设置页与收纳包只列这些（见 liveRows）。
   const live: LiveRow[] = [];
   let index = 0;
   const canDragOfficial = state.options.allowDragOfficial === true;
+
+  // 台账里没有、名字只能从元素上读的行的显示名（右侧边栏整条都不进台账，见 collectRightUnits）。
+  const unitLabels: Record<string, string> = {};
+  // 自带 id 的行（合成行与右侧边栏卡片）：id 是从元素上认出来的，直接按 id 找元素，不走台账配对。
+  const unitById: Record<string, HTMLElement> = {};
+  for (let i = 0; i < units.length; i++) {
+    const unitLabel = units[i].label;
+    const unitId = units[i].id;
+    if (!unitId) continue;
+    unitById[unitId] = units[i].el;
+    if (unitLabel && !unitLabels[unitId]) unitLabels[unitId] = unitLabel;
+  }
 
   // 遍历 `ordered`，让合成行和 slot 行共用同一条序号序列。
   let pairAt = 0;
@@ -184,11 +232,15 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): ScopeResul
         }
       }
     } else {
-      // DOM 派生的行已知自己的元素，不再消耗台账配对。
-      for (let j = 0; j < extraUnits.length; j++) {
-        if (extraUnits[j].id === id) {
-          el = extraUnits[j].el;
-          break;
+      // 自带 id 的行（右侧边栏的卡片）已经知道自己的元素。
+      el = unitById[id] || null;
+      if (!el) {
+        // DOM 派生的行已知自己的元素，不再消耗台账配对。
+        for (let j = 0; j < extraUnits.length; j++) {
+          if (extraUnits[j].id === id) {
+            el = extraUnits[j].el;
+            break;
+          }
         }
       }
       if (!el) {
@@ -197,34 +249,45 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): ScopeResul
       }
     }
     if (!el) continue;
-    clearMarks(el);
     claimed.push(el);
     const kind = kindOf(state, scope, id);
     const group = kind === "official" ? "official" : "third";
+    // 钉住的行不拿拖动标记：拖它换不了位置，只会把落点写进台账（见 isMoreEntry）。
+    const pinned = isMoreEntry(scope, id);
     const entry = byId[id];
-    live.push({ id: id, label: displayLabel(scope, id, entry && entry.hasLabel ? entry.label : "") });
-    el.setAttribute(MARKS.row, "1");
-    el.setAttribute(MARKS.scope, scope);
-    el.setAttribute(MARKS.id, id);
-    el.setAttribute(MARKS.kind, kind);
+    live.push({ id: id, label: rowDisplayLabel(scope, id, entry && entry.hasLabel ? entry.label : unitLabels[id] || ""), el: el });
+    setMark(el, MARKS.row, "1");
+    setMark(el, MARKS.scope, scope);
+    setMark(el, MARKS.id, id);
+    setMark(el, MARKS.kind, kind);
+    // 拖动中间态的老标记（见 MARK_NAMES）：投影不再写它们，遇到残留就擦掉。
+    setMark(el, MARKS.dragging, null);
+    setMark(el, MARKS.over, null);
+    setMark(el, MARKS.overActive, null);
     // 趁这一行在屏幕上，把它的图标记下来：「更多」菜单要靠它还原原按钮的样子，
     // 而收进去 / 收起的行在菜单打开时多半已经离屏（见 rememberRowIcon）。
     rememberRowIcon(scope, id, el);
-    if (group === "third" || canDragOfficial) el.setAttribute(MARKS.drag, "1");
+    if (!pinned && (group === "third" || canDragOfficial)) setMark(el, MARKS.drag, "1");
+    else setMark(el, MARKS.drag, null);
     if (isHidden(state, scope, id)) {
-      el.setAttribute(MARKS.hidden, "1");
+      setMark(el, MARKS.hidden, "1");
+      setOrder(el, "");
       continue;
     }
     // 收进官方「更多」菜单的行同样从主列表让位：视觉上就是「不见了」，但入口挪到了「更多」里，
     // 因此仍留在 live 记录中（设置页列得到、收纳包不会误收）。
     if (moreScopeOk(scope) && isIntoMore(state, scope, id)) {
-      el.setAttribute(MARKS.hidden, "1");
+      setMark(el, MARKS.hidden, "1");
+      setOrder(el, "");
       continue;
     }
+    // 这一行没被藏：老标记若还在（刚取消收起 / 刚移出「更多」）就擦掉。
+    setMark(el, MARKS.hidden, null);
     if (scope === "settings" && id === SELF_ID) applySelfIcon(el);
     // order 取连续的可见行序号：被隐藏的行不吃序号。
-    el.style.order = String(index++);
-    visible[group].push({ id: id, el: el });
+    setOrder(el, String(index++));
+    // 钉住的三点「更多」不算官方块的一员：它固定收在末尾，拿它当官方末行会把分割线画错地方。
+    if (!pinned) visible[group].push({ id: id, el: el });
   }
 
   // 收纳各管各自的：官方统计与用量百分比不再互相级联（见 OFFICIAL_IDS 的说明）。
@@ -240,16 +303,21 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): ScopeResul
 
   let tail = index;
   for (let i = 0; i < rows.length; i++) {
-    if (claimed.indexOf(rows[i]) < 0) rows[i].style.order = String(1000 + tail++);
+    if (claimed.indexOf(rows[i]) < 0) setOrder(rows[i], String(1000 + tail++));
   }
 
   // 只画在声明过的 scope 且两组都在屏上；线落在两块空隙正中，混合排序下一条直线描述不了多个交界则整条收起。
   let interleaved = false;
   if (dividerEnabled(state, scope) && mixedOrder(state)) {
-    const sequence = liveOrder(scope) || [];
+    const sequence = liveOrder(scope);
     let seenThird = false;
     for (let i = 0; i < sequence.length; i++) {
       if (isHidden(state, scope, sequence[i])) continue;
+      // 收进「更多」的行离场后 order 被清空（liveOrder 读回是 0），留在序列里会排在官方块中间，
+      // 后面每一颗官方按钮都被判成「穿插」，整条线就被收掉了（用户报：收走一颗第三方，线就没了）。
+      if (moreScopeOk(scope) && isIntoMore(state, scope, sequence[i])) continue;
+      // 钉住的三点「更多」固定收尾，它的位置不代表官方块与第三方块的交界。
+      if (isMoreEntry(scope, sequence[i])) continue;
       if (kindOf(state, scope, sequence[i]) === "third") seenThird = true;
       else if (seenThird) interleaved = true;
     }
@@ -261,8 +329,6 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): ScopeResul
   } else {
     hideDivider(scope);
   }
-
-  return { mounted: true, official: visible.official.length, third: visible.third.length };
 }
 
 function clearScope(scope: string): void {

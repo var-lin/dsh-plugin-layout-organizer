@@ -39,7 +39,14 @@ jobs:
           npm run check
           git diff --exit-code -- lib/client.js
       - name: 测试
-        run: npm test
+        run: |
+          node test/smoke.mjs
+          node test/gestures.mjs
+          node test/navigate.mjs
+          node test/accept.mjs
+      # 与 CI 同一道闸门：源码类型检查（没有 VS Code 的环境里它自己按需下载 typescript）
+      - name: 类型检查
+        run: node tools/ts-check.mjs
       # Trusted Publishing：npm CLI 检测 GitHub OIDC 环境自动完成认证
       - name: 发布到 npm（该版本已存在则跳过）
         run: |

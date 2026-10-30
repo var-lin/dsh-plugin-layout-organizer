@@ -1,5 +1,5 @@
 # PR 校验：开 PR 或推送主分支时，跑一遍与发版完全相同的闸门——
-# 构建、语法检查、已提交的构建产物与源码一致、三个测试、源码类型检查。
+# 构建、语法检查、已提交的构建产物与源码一致、五个测试、源码类型检查。
 # 发布只发生在 publish.yml（推送 v* tag），本工作流不触碰 npm 与 Release。
 name: CI
 
@@ -34,8 +34,13 @@ jobs:
           npm run check
           git diff --exit-code -- lib/client.js
       - name: 测试
-        run: npm test
-      # 类型检查依旧零依赖：不写进 package.json、不产生锁文件，按需下载固定版本。
-      # 版本与本地 tools/ts-check.mjs 吃的编辑器内置 TS 保持一致（6.0.3）。
+        run: |
+          node test/smoke.mjs
+          node test/gestures.mjs
+          node test/navigate.mjs
+          node test/accept.mjs
+      # 类型检查依旧零依赖：不写进 package.json、不产生锁文件。
+      # 走仓库自己的入口（与本地同一条命令）；机器上没有 VS Code 时它内部按需下载 6.0.3，
+      # 与下面注释里的版本一致，所以流水线与本地吃的是同一套诊断。
       - name: 类型检查
-        run: npx -y --package typescript@6.0.3 tsc -p tsconfig.json
+        run: node tools/ts-check.mjs

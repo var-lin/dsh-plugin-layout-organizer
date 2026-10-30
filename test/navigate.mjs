@@ -59,6 +59,16 @@ function walk(node, out) {
   return out;
 }
 
+/* 选择器组（`button, a, [role='button']`）按逗号切开后逐个试：真实 DOM 的
+   `querySelectorAll` 支持这种写法，插件点行时正是靠它找行里那颗按钮。 */
+function matchesAny(el, selector) {
+  const groups = String(selector).split(",");
+  for (const group of groups) {
+    if (group.trim() && matches(el, group)) return true;
+  }
+  return false;
+}
+
 function makeEl(tag) {
   const el = {
     tagName: String(tag).toUpperCase(),
@@ -99,16 +109,16 @@ function makeEl(tag) {
     },
     querySelector(sel) {
       const all = walk(this, []);
-      for (const el of all) if (matches(el, sel)) return el;
+      for (const el of all) if (matchesAny(el, sel)) return el;
       return null;
     },
     querySelectorAll(sel) {
-      return walk(this, []).filter((el) => matches(el, sel));
+      return walk(this, []).filter((el) => matchesAny(el, sel));
     },
     closest(sel) {
       let node = this;
       while (node) {
-        if (matches(node, sel)) return node;
+        if (matchesAny(node, sel)) return node;
         node = node.parentNode;
       }
       return null;
@@ -300,7 +310,7 @@ if (source.indexOf(anchor) < 0) {
   process.exit(1);
 }
 const capture =
-  "    try { globalThis.__loNavigateTo = navigateTo; } catch (err) { /* not present */ }\n" +
+  "    try { globalThis.__loNavigateTo = navigateTo; globalThis.__loSetViewOpener = setViewOpener; } catch (err) { /* not present */ }\n" +
   anchor;
 const probePath = join(dirname(file), "..", "lib", ".navigate-probe.mjs");
 /**
@@ -409,6 +419,111 @@ modal.querySelector("div").appendChild(untagged);
 open("settings", "untagged-id");
 await new Promise((r) => setTimeout(r, 20));
 check("untagged row matched by label", untagged.clicked === 1, untagged.clicked);
+
+console.log("right sidebar card route");
+
+// 宿主「开始」页的卡片：行元素是外层包裹盒，真正可点的是里面那颗带 kind 的按钮。
+// 投影会把包裹盒标记成 `data-lo-scope="right"` / `data-lo-id="<kind>"`。
+const rightList = makeEl("div");
+rightList.setAttribute("data-sidebar-right-guide", "true");
+const cardBox = makeEl("div");
+const cardButton = makeEl("button");
+cardButton.setAttribute("data-sidebar-right-guide-entry", "files");
+cardBox.appendChild(cardButton);
+cardBox.setAttribute("data-lo-row", "1");
+cardBox.setAttribute("data-lo-scope", "right");
+cardBox.setAttribute("data-lo-id", "files");
+rightList.appendChild(cardBox);
+body.appendChild(rightList);
+
+// 卡片在屏幕上时直接点宿主那颗按钮：不查任何服务，等于宿主自己动手。
+open("right", "files");
+check("card on screen is clicked itself", cardButton.clicked === 1, cardButton.clicked);
+
+// 卡片不在屏幕上时退回宿主的 openTab（kind 由投影 id 还原）。
+const openedTabs = [];
+const baseGet = ctx.get;
+ctx.get = function (name) {
+  if (name === "sidebarRight") {
+    return {
+      openTab(kind, options) {
+        openedTabs.push({ kind, replaceTab: options && options.replaceTab });
+      }
+    };
+  }
+  return baseGet(name);
+};
+body.removeChild(rightList);
+
+open("right", "files");
+check("card off screen falls back to openTab", openedTabs.length === 1 && openedTabs[0].kind === "files", JSON.stringify(openedTabs));
+check("openTab replaces the tab", openedTabs.length === 1 && openedTabs[0].replaceTab === true, JSON.stringify(openedTabs));
+
+// 连服务都没有时把右栏展开、等卡片重新画出来再点它（这里让它在一轮轮询后就出现）。
+ctx.get = baseGet;
+const silentRight = [];
+const origWarnRight = console.warn;
+console.warn = (msg) => silentRight.push(String(msg));
+open("right", "files");
+body.appendChild(rightList);
+await new Promise((r) => setTimeout(r, 120));
+console.warn = origWarnRight;
+check("card that comes back is clicked", cardButton.clicked === 2, cardButton.clicked);
+check("no failure reported when the card comes back", silentRight.length === 0, JSON.stringify(silentRight));
+
+// 右栏停在这一页之外的页面上：没有「开始」页容器、服务也调不通时，只剩标签条那颗「新标签页」。
+// 点它等于宿主自己重开「开始」页，卡片随即画出来，下一轮重试再点卡片。
+body.removeChild(rightList);
+const addTab = makeEl("button");
+addTab.setAttribute("data-dockkit-add-tab", "pane-1");
+addTab.onclick = () => {
+  body.appendChild(rightList);
+};
+body.appendChild(addTab);
+const silentGuide = [];
+console.warn = (msg) => silentGuide.push(String(msg));
+open("right", "files");
+await new Promise((r) => setTimeout(r, 240));
+console.warn = origWarnRight;
+check("guide is reopened through the strip control", addTab.clicked === 1, addTab.clicked);
+check("card on the reopened guide is clicked", cardButton.clicked === 3, cardButton.clicked);
+check("no failure reported after reopening the guide", silentGuide.length === 0, JSON.stringify(silentGuide));
+
+console.log("tabs overflow route");
+
+// 宿主的标签条按宽度只画前几颗（`visibleViewLimit`），排在后面的标签连 DOM 都没有：
+// 台账与位置配对都找不到元素，只剩「更多」渲染时登记的宿主选择回调这一条路。
+const tabStrip = makeEl("div");
+tabStrip.setAttribute("data-conversation-tabs", "");
+const firstTab = makeEl("button");
+firstTab.setAttribute("role", "tab");
+firstTab.textContent = "Context";
+tabStrip.appendChild(firstTab);
+body.appendChild(tabStrip);
+
+const selectedViews = [];
+if (typeof globalThis.__loSetViewOpener !== "function") {
+  console.error("FAIL: setViewOpener was not reachable in the bundle scope");
+  process.exit(1);
+}
+globalThis.__loSetViewOpener((id) => selectedViews.push(id));
+open("tabs", "fleet");
+check(
+  "overflowed tab is selected through the host opener",
+  selectedViews.length === 1 && selectedViews[0] === "fleet",
+  JSON.stringify(selectedViews)
+);
+
+// 标签真的在屏幕上时仍然点那一颗按钮本身，不必经过选择回调。
+firstTab.setAttribute("data-lo-row", "1");
+firstTab.setAttribute("data-lo-scope", "tabs");
+firstTab.setAttribute("data-lo-id", "fleet");
+open("tabs", "fleet");
+check(
+  "rendered tab is still clicked itself",
+  firstTab.clicked === 1 && selectedViews.length === 1,
+  firstTab.clicked + " / " + selectedViews.length
+);
 
 console.log(failures === 0 ? "\nNAVIGATE PASS" : "\nNAVIGATE FAIL (" + failures + ")");
 process.exit(failures === 0 ? 0 : 1);

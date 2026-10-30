@@ -118,7 +118,7 @@ function loBoundary(): any {
     }
 
     componentDidCatch(err: any): void {
-      warn("render failed; this panel stays empty: " + (err && err.message ? err.message : String(err)));
+      warn("render failed; this panel stays empty: " + errText(err));
     }
 
     render(): any {
@@ -176,13 +176,8 @@ interface RowItemProps {
   entry: RowEntry;
   // 这一行属于哪一处槽位：图标要按 scope + id 从原按钮上取（见 liveRowIcon）。
   scope?: string;
-  // 图标不按 scope 取、由调用方直接给（宿主自己那两项动作行），给了就不再查 liveRowIcon。
-  icon?: { svg: string; src: string };
-  // id 一列显示的文案；缺省显示 `entry.id`。动作行的 id 带虚拟槽位前缀，列里只显示后半段。
-  idText?: string;
   group?: string;
   kind?: string;
-  self?: boolean;
   draggable?: boolean;
   hidden?: boolean;
   canUp?: boolean;
@@ -193,15 +188,14 @@ interface RowItemProps {
   openTitle?: string;
   onOpen?: () => void;
   onMenu?: (event: any) => void;
-  // 「官方 / 第三方」判断按钮：动作行固定算官方，没有可切的分支，传假就不画。
-  canToggleKind?: boolean;
+  // 「官方 / 第三方」判断按钮：三颗「更多」入口固定算官方，靠 kindLocked 灰掉，不另开开关。
+  kindLocked?: boolean;
   onToggleKind?: () => void;
   onUp?: () => void;
   onDown?: () => void;
-  // 收起 / 恢复按钮：动作行永远在「更多」里，没有收起这一说，传假就不画。
-  canStash?: boolean;
   onToggleHidden?: () => void;
-  // 这一行是否已收进官方「更多」菜单；只有能收进去的槽位才画这个按钮（见 moreScopeOk）。
+  // 这一行是否已收进官方「更多」菜单；只有能收进去的槽位才画可点的这颗（见 moreScopeOk）。
+  // 不能收的行也画，但画成禁用的（见 RowItem 里那段说明）。
   intoMore?: boolean;
   onToggleMore?: () => void;
 }
@@ -235,6 +229,8 @@ function useSlotsTick(ctx: CtxLike): number {
     let i: number;
     for (i = 0; i < SCOPE_KEYS.length; i++) {
       const slotKey: string = SLOT_OF_SCOPE[SCOPE_KEYS[i]];
+      // 不进 slot 体系的 scope（右侧边栏的 guide 卡片）没有槽位可订阅，改由 useRevisionTick 驱动。
+      if (!slotKey) continue;
       try {
         disposers.push(ctx.slots.subscribe(slotKey, function () {
           setTick(function (value: number) {
@@ -341,6 +337,8 @@ function Card(props: CardProps): any {
           tabIndex: toggle ? 0 : undefined,
           onKeyDown: toggle
             ? function (event: any) {
+                // 焦点在右侧动作区上时，回车 / 空格归那颗按钮，不能顺手把卡片折了。
+                if (event && event.target && event.target.closest && event.target.closest(".lo-card-action")) return;
                 if (event && (event.key === "Enter" || event.key === " ")) {
                   event.preventDefault();
                   toggle();
@@ -434,7 +432,32 @@ function ConfirmBtn(props: { label: string; confirmLabel: string; onConfirm: () 
 }
 
 /**
- * 管理列表里的一行；`self` 是插件自己的设置条目（色块颜色不同，其余行为一致）。
+ * 行末那颗「进更多 / 出更多」按钮。
+ *
+ * 设置页卡片与收纳包面板两处的行都要它，行为与禁用规则一字不差：能收时是「进更多」，
+ * 已经收进去时是「出更多」；不能收的行（设置页导航、三颗「更多」入口）照样画出来，
+ * 只是禁用——空一格会让同一张卡里的名称区左右参差（用户 m02576#2）。宿主没有「更多」
+ * 菜单时整颗不画：那种宿主上这颗按钮本来就不出现。
+ *
+ * @param props `intoMore` 表示这一行当前已收进「更多」；`onToggle` 缺省即禁用。
+ * @returns 按钮元素；宿主没有「更多」且不可收时为 null。
+ */
+function IntoMoreButton(props: { intoMore: boolean; onToggle?: () => void }): any {
+  const enabled = typeof props.onToggle === "function";
+  if (!enabled && !moreAvailable()) return null;
+  return h(Btn, {
+    act: "more",
+    // 这一行正因为「已进更多」而变淡时，这颗按钮不跟着淡——它是把它带回来的入口（用户 m09308#1）。
+    lit: props.intoMore,
+    variant: props.intoMore ? "soft" : undefined,
+    disabled: !enabled,
+    onClick: props.onToggle,
+    title: !enabled ? t("action.intoMoreBlocked") : props.intoMore ? t("action.outOfMore") : t("action.intoMore")
+  }, props.intoMore ? t("action.outOfMore") : t("action.intoMore"));
+}
+
+/**
+ * 管理列表里的一行。
  *
  * 名称区（色块 + 名称 + id）是一块可点区域，点它跳转到这个按钮对应的页面，
  * 行为与收纳包里的同一行一致；右侧四个动作按钮不受影响。
@@ -458,7 +481,9 @@ function RowItem(props: RowItemProps): any {
     "data-hidden": props.hidden || props.intoMore ? "1" : undefined,
     onContextMenu: props.onMenu
   },
-    h("span", { className: "lo-grip", title: props.draggable ? t("action.drag") : undefined }, "\u22ee\u22ee"),
+    // 不能拖的行（三颗钉住的「更多」入口）不画把手，但保留那 14px 的占位：
+    // 把手一撤，名称就会跟着左移，和其余行对不齐。
+    h("span", { className: "lo-grip", "data-locked": props.draggable ? undefined : "1", title: props.draggable ? t("action.drag") : undefined }, "\u22ee\u22ee"),
     h("button", {
       type: "button",
       className: "lo-row-open",
@@ -472,23 +497,14 @@ function RowItem(props: RowItemProps): any {
       h("span", { className: "lo-row-name", title: entry.label }, entry.label),
       h("span", { className: "lo-row-id" }, entry.id)
     ),
-    props.canToggleKind === false ? null : h(Btn, { act: "kind", onClick: props.onToggleKind, title: t("action.toggleKind") }, props.kind === "official" ? t("kind.official") : t("kind.third")),
+    h(Btn, { act: "kind", onClick: props.onToggleKind, disabled: props.kindLocked === true, title: props.kindLocked ? t("action.kindBlocked") : t("action.toggleKind") }, props.kind === "official" ? t("kind.official") : t("kind.third")),
     h(Btn, { act: "up", size: "icon", onClick: props.onUp, disabled: !props.canUp, title: t("action.up") }, "\u2191"),
     h(Btn, { act: "down", size: "icon", onClick: props.onDown, disabled: !props.canDown, title: t("action.down") }, "\u2193"),
     // 「进更多」排在「收起」之前：一级比一级退得更远，与右键菜单同一顺序（见 menuActionsFor）。
     // 两个动作都不用实心底色：收起 / 恢复这一对原本就靠文字说清方向，多一块实心黑只会让
     // 同一行的四个按钮看起来三六九等（用户图3 反馈）。
-    props.onToggleMore
-      ? h(Btn, {
-        act: "more",
-        // 这一行正因为「已进更多」而变淡时，这颗按钮不跟着淡——它是把它带回来的入口（用户 m09308#1）。
-        lit: props.intoMore,
-        variant: props.intoMore ? "soft" : undefined,
-        onClick: props.onToggleMore,
-        title: props.intoMore ? t("action.outOfMore") : t("action.intoMore")
-      }, props.intoMore ? t("action.outOfMore") : t("action.intoMore"))
-      : null,
-    props.canStash === false ? null : h(Btn, {
+    h(IntoMoreButton, { intoMore: props.intoMore === true, onToggle: props.onToggleMore }),
+    h(Btn, {
       act: "stash",
       // 同上：收进悬浮框的行，「恢复」这颗按钮保持醒目。
       lit: props.hidden,

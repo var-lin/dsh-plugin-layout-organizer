@@ -20,58 +20,108 @@ interface ScopeCardProps {
  * 组装一张位置卡片要列的行：先按协调后的顺序排，再剔除屏幕上不存在的记录。
  *
  * 台账里渲染成空的记录（供应商未登录时的统计读数）不该出现，否则用户会对着一行看不见的
- * 条目排序、收纳（见 liveRows）。
+ * 条目排序、收纳（见 liveRows）。整条位置不在屏幕上时退回「上一次投影记下的行」，对话页关着
+ * 也能整理标签与停靠行（见 seenRows）。右侧边栏没有台账，卡片改按宿主注册表列，右栏收着时
+ * 也列（见 rightCardList）。
  *
- * @param ctx 上下文，用于读取槽位台账。
+ * @param ctx 上下文，用于读取槽位台账与右侧栏注册表。
  * @param state 当前插件状态，提供手工分类与已保存顺序。
- * @param scope 位置键（sidebar / footer / tabs / composer / settings）。
+ * @param scope 位置键（sidebar / footer / tabs / composer / right / settings）。
  * @returns 按显示顺序排列的行，文案已解析成人类可读的名字。
  */
 function scopeEntries(ctx: CtxLike, state: PluginState, scope: string): ScopeEntry[] {
   const entries = readEntries(ctx, scope);
-  const byId: Record<string, ScopeEntry> = {};
+  // 无原型对象：插件 id 里出现了 constructor / toString 这类名字时，普通对象会让
+  // `byId[id]` 命中原型上的成员，把台账里没有的行当成有记录的行走下去。
+  const byId: Record<string, ScopeEntry> = Object.create(null);
   let i: number;
-  for (i = 0; i < entries.length; i++) byId[entries[i].id] = entries[i];
+  for (i = 0; i < entries.length; i++) {
+    byId[entries[i].id] = {
+      id: entries[i].id,
+      label: entries[i].label,
+      order: entries[i].order || 0,
+      hasLabel: entries[i].hasLabel
+    };
+  }
   // 合成行（输入框停靠行的用量百分比）不是 slot 记录、台账里没有条目，但它确实在屏幕上，
   // 也要能在这张卡片里排序、收纳，因此按屏幕上的正证据补进来（见 syntheticIdsOf）。
   const synthetic = syntheticIdsOf(scope);
+  // 右侧边栏那一处没有台账，卡片按宿主注册表列：右栏收着、或正显示别的页面时也照常列，
+  // 用户不必先把右栏翻回「开始」页才能安排顺序（见 rightCardList，用户 m00519）。
+  const registry = scope === "right" ? rightCardList(ctx) : [];
+  const registered: Record<string, string> = Object.create(null);
+  for (i = 0; i < registry.length; i++) registered[registry[i].id] = registry[i].label;
+
+  const live = liveRowIds(scope);
+  // 位置整条不在屏幕上时（对话页关着，标签条与停靠行都不渲染），退回「上一次投影记下的行」：
+  // 它们真实存在过、名字也是屏幕上认过的，因此照样能在这里排顺序、收纳（用户 m00654）。
+  // 只记投影标记到的行，所以不会把台账里的影子行带进来；从没上过屏幕的位置仍是空的。
+  const seen = live === null && scope !== "right" ? seenRows(scope) : null;
 
   // 顺序由 `reconcileOrder` 重算，不从 DOM 读回
   const ids: string[] = [];
-  for (i = 0; i < entries.length; i++) ids.push(entries[i].id);
-  for (i = 0; i < synthetic.length; i++) if (ids.indexOf(synthetic[i]) < 0) ids.push(synthetic[i]);
+  if (seen) {
+    // 整条位置不在屏幕上：顺序以最后一次投影为准，台账里的额外记录不参与（见 seenRows）。
+    for (i = 0; i < seen.length; i++) ids.push(seen[i].id);
+  } else {
+    for (i = 0; i < entries.length; i++) ids.push(entries[i].id);
+    for (i = 0; i < synthetic.length; i++) if (ids.indexOf(synthetic[i]) < 0) ids.push(synthetic[i]);
+    for (i = 0; i < registry.length; i++) if (ids.indexOf(registry[i].id) < 0) ids.push(registry[i].id);
+  }
+  // 「更多工具」不在注册表里，但它是「开始」页固定的一颗：右栏收着时也照常列，收起 / 恢复
+  // 才不用先翻回「开始」页。投影在屏幕上时本来就会被 syntheticIdsOf 收进来。
+  if (scope === "right" && registered[MORE_ID] === undefined) {
+    registered[MORE_ID] = rowLabelOf(scope, MORE_ID) || t("row.more");
+    if (ids.indexOf(MORE_ID) < 0) ids.push(MORE_ID);
+  }
   const order = reconcileOrder(state, scope, ids);
 
-  // 只列屏幕上真正存在的行，五处槽位同一把尺子（见 listedInScope）：台账里有记录、这一轮
+  // 只列屏幕上真正存在的行，六处槽位同一把尺子（见 listedInScope）：台账里有记录、这一轮
   // 投影却没标记到的，一律不列——注册在这个槽位、实际渲染在别处的插件（Trae / WorkBuddy 的
-  // 额度读数）在台账里永远有记录，列出来就是点不动、也收纳不掉的影子行。
-  const live = liveRowIds(scope);
+  // 额度读数）在台账里永远有记录，列出来就是点不动、也收纳不掉的影子行。右侧边栏是例外：
+  // 它没有台账，注册表里列出的卡片就是真实存在的那几张，不依赖这一轮投影。
+  const seenLabel: Record<string, string> = Object.create(null);
+  if (seen) for (i = 0; i < seen.length; i++) seenLabel[seen[i].id] = seen[i].label;
   const listed: string[] = [];
-  for (i = 0; i < order.length; i++) {
-    const id = order[i];
-    if (!listedInScope(live, id)) continue;
-    if (byId[id] || synthetic.indexOf(id) >= 0) listed.push(id);
+  if (seen) {
+    for (i = 0; i < order.length; i++) if (seenLabel[order[i]] !== undefined) listed.push(order[i]);
+  } else {
+    for (i = 0; i < order.length; i++) {
+      const id = order[i];
+      if (!byId[id] && synthetic.indexOf(id) < 0 && registered[id] === undefined) continue;
+      if (registered[id] === undefined && !listedInScope(live, id)) continue;
+      listed.push(id);
+    }
+    // 协调后顺序里没见过的行按账本顺序追加在末尾，而不是悄悄消失。
+    for (i = 0; i < entries.length; i++) {
+      const id = entries[i].id;
+      if (listed.indexOf(id) >= 0) continue;
+      if (!listedInScope(live, id)) continue;
+      listed.push(id);
+    }
   }
-  // 协调后顺序里没见过的行按账本顺序追加在末尾，而不是悄悄消失。
-  for (i = 0; i < entries.length; i++) {
-    const id = entries[i].id;
-    if (listed.indexOf(id) >= 0) continue;
-    if (!listedInScope(live, id)) continue;
-    listed.push(id);
+
+  // 三颗「更多」入口永远排在最后，与屏幕上的投影一致（见 isMoreEntry）。台账里存下的顺序
+  // 可能把它们放在中间（老状态、或它们还不能拖动之前排的），而它们又不能拖动，不在这里
+  // 挪到末尾就再也回不去（用户 m04835）。
+  for (i = listed.length - 1; i >= 0; i--) {
+    if (!isMoreEntry(scope, listed[i])) continue;
+    const pinnedId = listed.splice(i, 1)[0];
+    listed.push(pinnedId);
   }
 
   const out: ScopeEntry[] = [];
   for (i = 0; i < listed.length; i++) {
     const id = listed[i];
     const entry = byId[id];
-    // 插件指定的名字最优先（宿主没给文案的读数条），其次台账文案，再退到投影记下的名字。
+    // 插件指定的名字最优先（宿主没给文案的读数条），其次是右侧栏的注册名、台账文案、投影记下的名字。
     const named = rowLabelOf(scope, id);
     if (!entry) {
-      // 合成行没有台账文案，名字只可能来自 ROW_LABELS 或投影记下的界面文字。
-      out.push({ id: id, label: named || liveRowLabel(scope, id) || hookLabel(scope, id) || id, order: 0, hasLabel: true });
+      // 合成行与右侧栏卡片都没有台账文案，名字只可能来自 ROW_LABELS、注册表、投影记下的界面文字。
+      out.push({ id: id, label: named || registered[id] || seenLabel[id] || liveRowLabel(scope, id) || hookLabel(scope, id) || id, order: 0, hasLabel: true });
       continue;
     }
-    const shown = named || (entry.hasLabel ? entry.label : liveRowLabel(scope, id) || hookLabel(scope, id));
+    const shown = named || (entry.hasLabel ? entry.label : seenLabel[id] || liveRowLabel(scope, id) || hookLabel(scope, id));
     out.push({ id: entry.id, label: shown || entry.label, order: entry.order, hasLabel: entry.hasLabel || !!shown });
   }
   return out;
@@ -80,7 +130,7 @@ function scopeEntries(ctx: CtxLike, state: PluginState, scope: string): ScopeEnt
 /**
  * 搜索串是否命中一张位置卡片：标题命中算整张留下，否则看有没有某一行命中。
  *
- * 单独抽出来是因为设置页也要用同一把尺子判断「五张卡片是不是全都没命中」——
+ * 单独抽出来是因为设置页也要用同一把尺子判断「六张卡片是不是全都没命中」——
  * 只有两边同规则，那句「没有匹配」的提示才和卡片实际的去留一致。
  *
  * @param entries 该位置要列的行。
@@ -156,6 +206,15 @@ function ScopeCard(props: ScopeCardProps): any {
   const groupIndex: Record<string, number> = { official: 0, third: 0 };
   const groupTotal: Record<string, number> = { official: 0, third: 0 };
   for (i = 0; i < entries.length; i++) groupTotal[groupOf(state, scope, entries[i].id)]++;
+  // 钉在末尾的「更多」不参与上下移：排在它前面的那一行也不该显示「下移」，
+  // 按下去只会在台账里跟它换个位，屏幕上纹丝不动（见 isMoreEntry）。
+  // 扣哪一组要看它此刻被判成官方还是第三方：旧状态里它可能还挂在第三方组末尾。
+  const pinnedId = entries.length > 0 && isMoreEntry(scope, entries[entries.length - 1].id) ? entries[entries.length - 1].id : "";
+  const pinnedGroup = pinnedId ? groupOf(state, scope, pinnedId) : "";
+  // 搜索把「更多」那一行滤掉时它不在 `shown` 里，也就不该再扣掉一个名额——否则这一组
+  // 最后一颗能动的行会平白少一个「下移」。
+  let pinnedShown = false;
+  for (i = 0; i < shown.length; i++) if (pinnedId && shown[i].id === pinnedId) pinnedShown = true;
   for (i = 0; i < shown.length; i++) {
     const entry = shown[i];
     const id = entry.id;
@@ -163,63 +222,62 @@ function ScopeCard(props: ScopeCardProps): any {
     const group = kind === "official" ? "official" : "third";
     const listGroup = mixed ? "all" : group;
     const hidden = isHidden(state, scope, id);
-    const self = scope === "settings" && id === SELF_ID;
     // 名称区能否点击跳转：与收纳包同一把尺子（见 rowNavigable），界面上点不动的行这里也灰着。
     const canOpen = rowNavigable(scope, id);
     const openTitle = canOpen ? t("action.goto") : t("action.static");
     const index = mixed ? entries.indexOf(entry) : groupIndex[group]++;
-    const total = mixed ? entries.length : groupTotal[group];
-    (function (entry: ScopeEntry, id: string, kind: string, group: string, index: number, hidden: boolean, self: boolean, canOpen: boolean, openTitle: string) {
-      rows.push(h(RowItem, {
-        key: scope + ":" + id,
-        entry: entry,
-        scope: scope,
-        kind: kind,
-        group: group,
-        hidden: hidden,
-        self: self,
-        draggable: true,
-        canUp: index > 0,
-        canDown: index < total - 1,
-        canOpen: canOpen,
-        openTitle: openTitle,
-        onOpen: function () {
-          navigateFromSettings(ctx, scope, id);
-        },
-        onToggleKind: function () {
-          store.update(function (next: PluginState) {
-            next.kinds[scope + ":" + id] = kind === "official" ? "third" : "official";
-          });
-        },
-        onUp: function () {
-          store.update(function (next: PluginState) {
-            // 混合排序下整条 scope 就是一个组（"all"），moveRow 只认 official / third。
-            moveRow(next, scope, id, -1, group === "all" ? undefined : group);
-          });
-        },
-        onDown: function () {
-          store.update(function (next: PluginState) {
-            moveRow(next, scope, id, 1, group === "all" ? undefined : group);
-          });
-        },
-        onToggleHidden: function () {
-          store.update(function (next: PluginState) {
-            setHidden(next, scope, id, !hidden);
-          });
-        },
-        // 「更多」只对能收进去的槽位有意义（侧边栏 / 底部 / 标签 / 停靠行）；设置行没有容器可去。
-        intoMore: moreScopeOk(scope) && isIntoMore(state, scope, id),
-        onToggleMore: moreScopeOk(scope) ? function () {
-          const into = isIntoMore(store.get(), scope, id);
-          store.update(function (next: PluginState) {
-            setIntoMore(next, scope, id, !into);
-          });
-        } : undefined,
-        onMenu: function (event: MouseEvent) {
-          attachMenuAt(event, ctx, store, scope, id, group);
-        }
-      }));
-    })(entry, id, kind, listGroup, index, hidden, self, canOpen, openTitle);
+    const total = (mixed ? entries.length : groupTotal[group]) - ((mixed || group === pinnedGroup) && pinnedShown ? 1 : 0);
+    rows.push(h(RowItem, {
+      key: scope + ":" + id,
+      entry: entry,
+      scope: scope,
+      kind: kind,
+      group: listGroup,
+      hidden: hidden,
+      // 三颗「更多」入口钉在列表末尾：不能拖、不能上下移、也不能改判官方 / 第三方（用户 m04058）。
+      draggable: !isMoreEntry(scope, id),
+      kindLocked: isMoreEntry(scope, id),
+      canUp: !isMoreEntry(scope, id) && index > 0,
+      canDown: !isMoreEntry(scope, id) && index < total - 1,
+      canOpen: canOpen,
+      openTitle: openTitle,
+      onOpen: function () {
+        navigateFromSettings(ctx, scope, id);
+      },
+      onToggleKind: function () {
+        store.update(function (next: PluginState) {
+          next.kinds[scope + ":" + id] = kind === "official" ? "third" : "official";
+        });
+      },
+      onUp: function () {
+        store.update(function (next: PluginState) {
+          // 混合排序下整条 scope 就是一个组（"all"），moveRow 只认 official / third。
+          moveRow(next, scope, id, -1, listGroup === "all" ? undefined : listGroup);
+        });
+      },
+      onDown: function () {
+        store.update(function (next: PluginState) {
+          moveRow(next, scope, id, 1, listGroup === "all" ? undefined : listGroup);
+        });
+      },
+      onToggleHidden: function () {
+        store.update(function (next: PluginState) {
+          setHidden(next, scope, id, !hidden);
+        });
+      },
+      // 「更多」只对能收进去的槽位有意义（侧边栏 / 底部 / 标签 / 停靠行 / 右侧边栏）；设置行没有容器可去。
+      // 三颗「更多」入口按钮自己不给这个键（见 isMoreEntry）：收进去就再也点不开那扇菜单。
+      intoMore: canTuckIntoMore(scope, id) && isIntoMore(state, scope, id),
+      onToggleMore: canTuckIntoMore(scope, id) ? function () {
+        const into = isIntoMore(store.get(), scope, id);
+        store.update(function (next: PluginState) {
+          setIntoMore(next, scope, id, !into);
+        });
+      } : undefined,
+      onMenu: function (event: MouseEvent) {
+        attachMenuAt(event, store, scope, id, listGroup);
+      }
+    }));
   }
 
   // 「恢复本组默认顺序」放在卡片标题右侧：它作用于整张卡片，属于标题级动作；
@@ -230,9 +288,8 @@ function ScopeCard(props: ScopeCardProps): any {
     collapsed: !cardOpen,
     onToggleCollapse: function () {
       store.update(function (next: PluginState) {
-        if (!next.options.collapsed) next.options.collapsed = {};
         // cardOpen 是「当前是否展开」：展开着点一下 → collapsed=true，收起着点一下 → collapsed=false。
-        next.options.collapsed[cardKey] = cardOpen;
+        setCollapsed(next, cardKey, cardOpen);
       });
     },
     action: h(ConfirmBtn, {
@@ -247,7 +304,8 @@ function ScopeCard(props: ScopeCardProps): any {
       }
     })
   },
-    mounted ? null : h("div", { className: "lo-note" }, t("scope.missing")),
+    // 这一组此刻不在屏幕上时给一句解释；右侧边栏的卡片按注册表列出来了，就不必再让人先去翻页面。
+    mounted || rows.length > 0 ? null : h("div", { className: "lo-note" }, t("scope.missing")),
     rows.length > 0
       ? h("div", { className: "lo-rows", "data-lo-list-scope": scope }, rows)
       : h("div", { className: "lo-empty" }, query && !hitAll ? t("empty.search") : t("empty.list"))

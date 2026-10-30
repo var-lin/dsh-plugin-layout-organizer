@@ -13,7 +13,8 @@ if (!version) {
 }
 
 const changelog = readFileSync(new URL("../CHANGELOG.md", import.meta.url), "utf8");
-const lines = changelog.split("\n");
+// 仓库在 Windows 上检出时是 CRLF：不按 `\r?\n` 切，Release 正文每行尾巴都会带一个 `\r`。
+const lines = changelog.split(/\r?\n/);
 const start = lines.findIndex((line) => line.startsWith(`## [${version}]`));
 if (start < 0) {
   console.error(`CHANGELOG.md has no section for ${version}`);

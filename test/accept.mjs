@@ -51,7 +51,9 @@ t("04b icon replaced", existsSync(join(root, "assets", "icons", "layout.svg")) &
 // 分割线的辅助函数在 `src/core/dom-line.ts` 里叫 `showDivider`。
 t("05 divider implemented", /showDivider/.test(code) && /lo-divider/.test(code) && /className: CLASS\.divider|CLASS\.divider/.test(code));
 t("06 rows are not text-selectable", /\.lo-row \*\{[^}]*user-select:\s*none/.test(css.replace(/\s+/g, " ")));
-t("07 stash click closes the settings dialog", /closeSettings/.test(stash) && /function closeSettings/.test(navigate));
+// 收纳包里的行点开之后要关掉设置弹窗：它和设置页卡片走同一条 `navigateFromSettings`，
+// 关弹窗的动作就在那里面，故两处任一出现即可。
+t("07 stash click closes the settings dialog", /closeSettings|navigateFromSettings/.test(stash) && /function closeSettings/.test(navigate));
 t("08 exactly three sort modes", /SORT_MODES[^=]*= \["scope", "kind", "alpha"\]/.test(constants));
 t("08b restore-all sits on its own row", /lo-stash-actions/.test(css) && /lo-stash-actions/.test(stash));
 const idx = ['key: "sidebar"', 'key: "footer"', 'key: "tabs"', 'key: "composer"', 'key: "settings"'].map((k) => constants.indexOf(k));
@@ -143,7 +145,7 @@ t("23 version badge matches package.json",
 
 /* 搜索无命中的提示必须按数据算，不能看 `h(ScopeCard, …)` 的返回值：
    `h()` 只是创建一个元素对象，永远为真——卡片返回 null 要等 React 渲染时才发生。
-   用元素真值判断会让「五张卡片全没命中」永远判成有命中，搜索结果显示成一片空白。 */
+   用元素真值判断会让「六张卡片全没命中」永远判成有命中，搜索结果显示成一片空白。 */
 {
   const flat = code.replace(/\s+/g, "");
   t("24 search hit test reads data, not element truthiness",
@@ -161,7 +163,9 @@ t("23 version badge matches package.json",
   t("25 stash rows follow the real clickability of the row",
     /functionrowClickable\(el:HTMLElement\):boolean\{/.test(flat) &&
     /returnisInteractive\(el\)\|\|clickTargetOf\(el\)!==el;/.test(flat) &&
-    /if\(!liveRowIds\(scope\)\)returnfalse;/.test(flat) &&
+    /if\(!liveRowIds\(scope\)\)returnviewSelectable\(scope,id\);/.test(flat) &&
+    /functionviewSelectable\(scope:string,id:string\):boolean\{/.test(flat) &&
+    /if\(scope!=="tabs"\|\|!loViewOpener\|\|!loActiveCtx\)returnfalse;/.test(flat) &&
     /constnavigable=rowNavigable\(item\.scope,item\.id\);/.test(flat) &&
     /navigable:navigable,/.test(flat),
     flat.slice(flat.indexOf("functionrowClickable"), flat.indexOf("functionrowClickable") + 60));
@@ -181,12 +185,13 @@ t("23 version badge matches package.json",
     flat.slice(flat.indexOf(".lo-stash-group.lo-btn"), flat.indexOf(".lo-stash-group.lo-btn") + 80));
 }
 
-/* 「注册在这个槽位、渲染在别处」的记录靠机制判，不靠点名名单：五处槽位共用一把尺子，
-   只有这一轮投影真正标记到的行才算存在；按位置兜底也跳过带认领钩子的记录。
+/* 「注册在这个槽位、渲染在别处」的记录靠机制判，不靠点名名单：有台账的槽位共用一把尺子，
+   只有这一轮投影真正标记到的行才算存在；右侧边栏没有台账，改按宿主注册表列（见 rightCardList）。
+   按位置兜底也跳过带认领钩子的记录。
    搜索时卡片与分组照旧可折叠，不能被搜索词强行拉开。 */
 {
   const flat = code.replace(/\s+/g, "");
-  t("28 only projected rows count, in all five scopes",
+  t("28 only projected rows count for ledger-backed slots",
     /functionlistedInScope\(live:string\[\]\|null,id:string\):boolean\{/.test(flat) &&
     /return!!live&&live\.indexOf\(id\)>=0;/.test(flat) &&
     /constmissing=!listedInScope\(live,item\.id\);/.test(flat) &&
@@ -202,14 +207,14 @@ t("23 version badge matches package.json",
 /* 合成 id 与官方 id 的重叠必须逐条报备：合成行没有台账条目，但分类上可以属于官方
    （`composer:context-meter` 就是这种情况）。没报备的重叠说明有人把合成行当台账行写了。 */
 {
-  const ALLOWED_OVERLAP = ["composer:context-meter", "sidebar:more"];
+  const ALLOWED_OVERLAP = ["composer:context-meter", "right:more", "sidebar:more", "tabs:more"];
   const officialStart = constants.indexOf("const OFFICIAL_IDS");
   const officialEnd = constants.indexOf("HIDDEN_LEDGER_IDS");
   const syntheticStart = constants.indexOf("const SYNTHETIC_IDS");
   const syntheticEnd = constants.indexOf("// 一条记录的 DOM 认领钩子");
   const officialBlock = constants.slice(officialStart, officialEnd);
   const syntheticBlock = constants.slice(syntheticStart, syntheticEnd);
-  const scopeKeys = ["sidebar", "footer", "tabs", "composer", "settings"];
+  const scopeKeys = ["sidebar", "footer", "tabs", "composer", "right", "settings"];
   const listedOfficial = (key) => {
     const at = officialBlock.indexOf(`${key}: [`);
     if (at < 0) return [];
@@ -226,6 +231,19 @@ t("23 version badge matches package.json",
     listedOfficial(key).filter((id) => listedSynthetic(key).includes(id) && !ALLOWED_OVERLAP.includes(`${key}:${id}`)).map((id) => `${key}:${id}`)
   );
   t("15 synthetic ids never claim ledger identity", offenders.length === 0, offenders.join(", "));
+}
+
+/* 对话页那扇「更多」菜单：宿主因宽度不够自己收进来的标签，宿主已经替它们画了行，
+   我们再画同一颗标签就是重复项；去重只能去我们这行（宿主那行删不掉，用户 m00878）。 */
+{
+  const flat = strip(rd("ui/more-menu.ts")).replace(/\s+/g, "");
+  t(
+    "40 host-listed view tabs drop our duplicate menu rows",
+    /consthostViews:string\[\]=\[\];/.test(flat) &&
+      /constshown=rows\.filter\(function\(row\)\{/.test(flat) &&
+      /row\.scope==="tabs"&&hostViews\.indexOf\(row\.id\)>=0/.test(flat),
+    flat.slice(flat.indexOf("constshown=rows.filter"), flat.indexOf("constshown=rows.filter") + 120)
+  );
 }
 
 console.log(failed === 0 ? `\nACCEPT PASS (${total}/${total})` : `\nACCEPT FAIL (${failed} of ${total} failed)`);

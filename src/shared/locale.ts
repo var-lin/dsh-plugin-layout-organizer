@@ -1,7 +1,7 @@
 const ZH: Record<string, string> = {
   "nav": "插件布局整理",
   "title": "插件布局整理",
-  "subtitle": "对 DSH 投放到侧边栏顶部、侧边栏底部、对话标签、输入框停靠行与设置页导航的插件按钮做拖拽排序、官方/第三方分隔线与按钮收纳。只改变显示位置，不改动插件注册表。",
+  "subtitle": "对 DSH 投放到左侧边栏顶部、左侧边栏底部、对话页顶部标签、对话页输入框下方、右侧边栏开始页与设置窗口左侧导航的插件按钮做拖拽排序、官方/第三方分隔线与按钮收纳。只改变显示位置，不改动插件注册表。",
   "version.hint": "当前插件版本",
 
   "section.options": "通用设置",
@@ -12,11 +12,12 @@ const ZH: Record<string, string> = {
   "search.placeholder": "搜索按钮名称或 id",
   "search.clear": "取消搜索",
 
-  "scope.sidebar": "侧边栏顶部按钮",
-  "scope.footer": "侧边栏底部按钮",
-  "scope.tabs": "对话标签顶部按钮",
-  "scope.composer": "对话输入框停靠行按钮",
-  "scope.settings": "设置页侧边栏按钮",
+  "scope.sidebar": "左侧边栏·顶部",
+  "scope.footer": "左侧边栏·底部",
+  "scope.tabs": "对话页·顶部标签",
+  "scope.composer": "对话页·输入框下方",
+  "scope.right": "右侧边栏·开始页",
+  "scope.settings": "设置窗口·左侧导航",
   "scope.missing": "当前界面未显示这一组按钮。打开对应页面后即可整理。",
 
   "opt.allowDragOfficial": "允许拖动官方按钮",
@@ -25,16 +26,18 @@ const ZH: Record<string, string> = {
   "opt.mixGroups.hint": "打开后官方按钮可以和第三方按钮穿插排列，分隔线在两类混在一起时自动隐藏。",
   "opt.showDivider": "显示官方 / 第三方分隔线",
   "opt.showDivider.hint": "打开后官方按钮整体排在前面，第三方按钮整体排在后面，中间画一条线；关闭时下属行变灰、一条线也不画，点亮任意一路会自动打开本开关。",
-  "opt.divider.sidebar": "显示侧边栏顶部按钮分隔线",
-  "opt.divider.sidebar.hint": "只影响侧边栏顶部按钮这一组，其余位置不受影响。",
-  "opt.divider.tabs": "显示对话标签顶部按钮分隔线",
-  "opt.divider.tabs.hint": "只影响对话标签顶部按钮这一组，其余位置不受影响。",
-  "opt.divider.settings": "显示设置页侧边栏按钮分隔线",
-  "opt.divider.settings.hint": "只影响设置页侧边栏按钮这一组，其余位置不受影响。",
+  "opt.divider.sidebar": "显示左侧边栏·顶部的分隔线",
+  "opt.divider.sidebar.hint": "只影响左侧边栏·顶部这一组，其余位置不受影响。",
+  "opt.divider.tabs": "显示对话页·顶部标签的分隔线",
+  "opt.divider.tabs.hint": "只影响对话页·顶部标签这一组，其余位置不受影响。",
+  "opt.divider.right": "显示右侧边栏·开始页的分隔线",
+  "opt.divider.right.hint": "只影响右侧边栏·开始页这一组，其余位置不受影响。",
+  "opt.divider.settings": "显示设置窗口·左侧导航的分隔线",
+  "opt.divider.settings.hint": "只影响设置窗口·左侧导航这一组，其余位置不受影响。",
   "opt.showLauncher": "显示悬浮按钮",
   "opt.showLauncher.hint": "关闭后只能用快捷键或本页按钮打开这个面板。",
   "opt.separateMore": "分开收纳",
-  "opt.separateMore.hint": "打开后侧边栏的按钮（含侧边栏底部按钮）只收进侧边栏的「更多」，对话区的按钮只收进对话的「更多」；关闭时两处共用一份清单，收进哪一处都在两处出现。右侧栏的「更多工具」不受影响，始终列全部。",
+  "opt.separateMore.hint": "打开后左侧边栏顶部与底部的按钮只收进左侧边栏的「更多」，对话页顶部标签与输入框下方的行只收进对话的「更多」，右侧边栏开始页的卡片只收进右侧边栏的「更多工具」；关闭时三处共用一份清单，收进哪一处都在三处出现。设置页左侧导航不收进任何「更多」。",
   "opt.divider.more": "显示「更多」菜单里的分隔线",
   "opt.divider.more.hint": "官方按钮排前面、第三方按钮排后面，中间画一条线。",
 
@@ -59,7 +62,10 @@ const ZH: Record<string, string> = {
   "action.restore": "恢复",
   "action.intoMore": "进更多",
   "action.outOfMore": "出更多",
-  "action.intoMore.hint": "从主列表移到「更多」菜单里，仍然可以从那里打开",
+  // 禁用态的提示：说清是「这一行本来就不收」而不是「暂时点不动」。
+  "action.intoMoreBlocked": "这一行不能收进「更多」",
+  // 三颗「更多」入口的改判按钮：位置钉死在末尾，也没有可切的另一段。
+  "action.kindBlocked": "「更多」入口固定算官方，不能改判",
   // 宿主「更多」菜单里那两项的兜底文案与提示词。文案在接管时直接读宿主渲染的那一份，
   // 只有读不到（宿主改过结构）才用这里的；提示词按菜单归属分两套，与宿主自己发的一致。
   "action.up": "上移",
@@ -111,7 +117,6 @@ const ZH: Record<string, string> = {
   "shortcut.failed": "保存失败（{status}），快捷键未改动。",
   "shortcut.hint": "快捷键同样可以在 DSH 的「快捷键」设置里修改。",
 
-  "note.hideOnly": "收起只影响显示，随时可以在这里恢复。",
   "note.degrade": "部分能力不可用，已自动降级：",
 
   "nav.failed": "无法打开「{label}」，该按钮可能已不可用。"
@@ -120,7 +125,7 @@ const ZH: Record<string, string> = {
 const EN: Record<string, string> = {
   "nav": "Plugin layout organizer",
   "title": "Plugin layout organizer",
-  "subtitle": "Drag-and-drop reordering, official/third-party dividers and a stash panel for the buttons DSH renders in the sidebar, the sidebar footer, the conversation tabs, the composer dock and Settings. Only display position changes; the plugin registry is untouched.",
+  "subtitle": "Drag-and-drop reordering, official/third-party dividers and a stash panel for the buttons DSH renders on the left sidebar top, the left sidebar bottom, the conversation page's top tabs, the conversation page's dock row below the composer, the right sidebar Start page and the Settings window's left navigation. Only display position changes; the plugin registry is untouched.",
   "version.hint": "Installed plugin version",
 
   "section.options": "General",
@@ -131,11 +136,12 @@ const EN: Record<string, string> = {
   "search.placeholder": "Search button name or id",
   "search.clear": "Clear search",
 
-  "scope.sidebar": "Sidebar top buttons",
-  "scope.footer": "Sidebar bottom buttons",
-  "scope.tabs": "Conversation top tabs",
-  "scope.composer": "Conversation dock buttons",
-  "scope.settings": "Settings navigation buttons",
+  "scope.sidebar": "Left sidebar · top",
+  "scope.footer": "Left sidebar · bottom",
+  "scope.tabs": "Conversation page · top tabs",
+  "scope.composer": "Conversation page · below composer",
+  "scope.right": "Right sidebar · Start page",
+  "scope.settings": "Settings window · left navigation",
   "scope.missing": "This group is not on screen right now. Open the matching page to organize it.",
 
   "opt.allowDragOfficial": "Allow dragging official buttons",
@@ -144,16 +150,18 @@ const EN: Record<string, string> = {
   "opt.mixGroups.hint": "When on, official and third-party buttons can interleave; the divider hides itself once the two kinds are mixed.",
   "opt.showDivider": "Show the official / third-party divider",
   "opt.showDivider.hint": "Official buttons move to the front, third-party buttons to the back, with a line between them. When off the rows below grey out and no line is drawn; lighting one up switches this one on.",
-  "opt.divider.sidebar": "Divider for sidebar top buttons",
-  "opt.divider.sidebar.hint": "Applies only to the sidebar top button group; other locations are unaffected.",
-  "opt.divider.tabs": "Divider for conversation tab buttons",
-  "opt.divider.tabs.hint": "Applies only to the conversation tab button group; other locations are unaffected.",
-  "opt.divider.settings": "Divider for Settings navigation buttons",
-  "opt.divider.settings.hint": "Applies only to the Settings navigation button group; other locations are unaffected.",
+  "opt.divider.sidebar": "Divider for the left sidebar · top group",
+  "opt.divider.sidebar.hint": "Applies only to the left sidebar · top group; other locations are unaffected.",
+  "opt.divider.tabs": "Divider for the conversation page · top tabs group",
+  "opt.divider.tabs.hint": "Applies only to the conversation page · top tabs group; other locations are unaffected.",
+  "opt.divider.right": "Divider for the right sidebar · Start page group",
+  "opt.divider.right.hint": "Applies only to the right sidebar · Start page group; other locations are unaffected.",
+  "opt.divider.settings": "Divider for the settings window · left navigation group",
+  "opt.divider.settings.hint": "Applies only to the settings window · left navigation group; other locations are unaffected.",
   "opt.showLauncher": "Show the floating button",
   "opt.showLauncher.hint": "When off, only the shortcut or this page can open this panel.",
-  "opt.separateMore": "Keep the two More menus apart",
-  "opt.separateMore.hint": "When on, sidebar buttons (including the sidebar footer) only go into the sidebar More, and conversation buttons only into the conversation More. When off, both menus share one list, so anything tucked in shows up in both. The right sidebar's \"More tools\" is not affected and always lists everything.",
+  "opt.separateMore": "Keep the More menus apart",
+  "opt.separateMore.hint": "When on, buttons at the top and bottom of the left sidebar only go into the left sidebar More, rows in the conversation top tabs and below the composer only into the conversation More, and cards on the right sidebar Start page only into the right sidebar \"More tools\". When off, the three menus share one list, so anything tucked in shows up in all three. Settings-window navigation rows never go into any More menu.",
   "opt.divider.more": "Divider inside the More menu",
   "opt.divider.more.hint": "Official buttons first, third-party after, with a line between them.",
 
@@ -175,7 +183,8 @@ const EN: Record<string, string> = {
   "action.restore": "Restore",
   "action.intoMore": "Into more",
   "action.outOfMore": "Out of more",
-  "action.intoMore.hint": "Move it out of the main list and into the More menu, where it stays reachable",
+  "action.intoMoreBlocked": "This row cannot go into the More menu",
+  "action.kindBlocked": "A More entry is always official and cannot be reclassified",
   "action.up": "Move up",
   "action.down": "Move down",
   "action.left": "Move left",
@@ -225,7 +234,6 @@ const EN: Record<string, string> = {
   "shortcut.failed": "Could not save ({status}); the shortcut is unchanged.",
   "shortcut.hint": "The shortcut can also be changed in the DSH Shortcuts settings.",
 
-  "note.hideOnly": "Tucking away affects display only; restore it here at any time.",
   "note.degrade": "Some capabilities are unavailable; running degraded:",
 
   "nav.failed": "Could not open “{label}”; that button may no longer be available."

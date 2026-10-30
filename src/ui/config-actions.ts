@@ -35,9 +35,17 @@ function importConfig(store: StoreHandle, done: (ok: boolean) => void): void {
   const input = document.createElement("input");
   input.type = "file";
   input.accept = "application/json,.json";
+  // 取消选择时 `change` 不触发，临时 input 会一直挂在 body 上：选完或窗口拿回焦点都要收掉。
+  let cleaned = false;
+  function cleanup(): void {
+    if (cleaned) return;
+    cleaned = true;
+    window.removeEventListener("focus", cleanup);
+    if (input.parentNode) input.parentNode.removeChild(input);
+  }
   input.addEventListener("change", function () {
     const file = input.files && input.files[0];
-    input.remove();
+    cleanup();
     if (!file) return;
     const reader = new FileReader();
     reader.addEventListener("load", function () {
@@ -59,6 +67,7 @@ function importConfig(store: StoreHandle, done: (ok: boolean) => void): void {
     });
     reader.readAsText(file);
   });
+  window.addEventListener("focus", cleanup);
   document.body.appendChild(input);
   input.click();
 }

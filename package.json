@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-layout-organizer",
-  "version": "1.2.7",
-  "description": "Drag-and-drop reordering, official/third-party dividers and a stash panel for the buttons DSH renders in the sidebar, the sidebar footer, the conversation tabs, the composer dock and Settings. Only display position changes; the plugin registry is untouched.",
+  "version": "1.3.0",
+  "description": "Drag-and-drop reordering, official/third-party dividers and a stash panel for the buttons DSH renders in the left sidebar, the sidebar footer, the conversation tabs, the composer dock, the right sidebar Start page and Settings. Only display position changes; the plugin registry is untouched.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -34,7 +34,7 @@
   "scripts": {
     "build": "node build.mjs",
     "check": "node --check lib/client.js",
-    "test": "node test/smoke.mjs && node test/navigate.mjs && node test/accept.mjs"
+    "test": "node test/smoke.mjs && node test/gestures.mjs && node test/navigate.mjs && node test/accept.mjs"
   },
   "keywords": [
     "deepseek-harness",

@@ -20,10 +20,18 @@ function outletSelector(scope: string): string | null {
   return selector;
 }
 
-function outletChildren(slotKey: string): HTMLElement[] | null {
-  const outlet = outletOf(slotKey);
-  if (!outlet) return null;
-  return elementChildren(outlet);
+/**
+ * 这个元素是不是一处「更多」入口（自己就是菜单按钮，或包裹盒里装着菜单按钮）。
+ *
+ * 三处菜单的 DOM 结构各不相同（侧边栏包一层 moreAnchor、对话页是标签条的兄弟层、
+ * 右侧栏是 guide 容器末尾的包裹盒），但共同点都是 `aria-haspopup="menu"`。
+ *
+ * @param el 候选元素（必须是容器自己的直接子项）。
+ * @returns 是菜单入口时为真。
+ */
+function isMenuTrigger(el: Element): boolean {
+  if (el.matches("[aria-haspopup='menu']")) return true;
+  return !!el.querySelector("[aria-haspopup='menu']");
 }
 
 /**
@@ -56,10 +64,9 @@ function collectSidebarUnits(): RowUnit[] | null {
       // 「更多」的包裹层：里面是带 aria-haspopup 的菜单按钮，这一处槽位才挂可展开菜单。
       // 面板行自己也可能带弹出菜单，能认到 panellist 出口的那一行就不算「更多」。
       const slotOutlet = kid.querySelector('[data-slot="sidebar.panellist"]');
-      const moreButton = slotOutlet ? null : kid.querySelector("[aria-haspopup='menu']");
-      if (moreButton || String(kid.className || "").indexOf("moreAnchor") >= 0) {
-        // 宿主确实画了「更多」——这扇菜单存在，把能力闸门打开（见 moreAvailable）。
-        noteMoreAvailable();
+      if (!slotOutlet && (isMenuTrigger(kid) || String(kid.className || "").indexOf("moreAnchor") >= 0)) {
+        // 宿主确实画了「更多」——这扇菜单存在，把能力闸门打开（见 moreAvailableFor）。
+        noteMoreAvailable("sidebar");
         units.push({ el: kid, id: synthetic[next] !== undefined ? synthetic[next] : "sidebar-" + next });
         next++;
         continue;
@@ -145,10 +152,6 @@ function collectSettingsRows(): HTMLElement[] | null {
   return buttons.length > 0 ? (Array.prototype.slice.call(buttons) as HTMLElement[]) : null;
 }
 
-function collectFooterRows(): HTMLElement[] | null {
-  return outletChildren("sidebar.footer.action");
-}
-
 /**
  * 声明了 outlet 选择器的 scope 的通用兜底，也是定制收集器一无所获时的最后手段。
  *
@@ -184,10 +187,53 @@ function collectTabRows(): HTMLElement[] | null {
   return deep.length > 0 ? (Array.prototype.slice.call(deep) as HTMLElement[]) : null;
 }
 
+/**
+ * 对话标签条上那颗「更多」按钮（三个点）。
+ *
+ * 它不在 `[data-conversation-tabs]` 里：宿主把它画在标签条容器的兄弟位置上（与
+ * `role="tablist"` 平级），所以 `collectTabRows` 收不到它。这里从标签条往上找一层容器，
+ * 认里面有 `aria-haspopup="menu"` 的那颗按钮，再取它在容器里的直接子元素当行元素。
+ *
+ * @returns 包裹盒；没渲染或没有「更多」时返回 null。
+ */
+function tabMoreRow(): HTMLElement | null {
+  const list = document.querySelector("[data-conversation-tabs]");
+  if (!list) return null;
+  const holder = list.parentElement;
+  if (!holder) return null;
+  // 取容器下的直接子元素：行元素必须是容器自己的孩子，`style.order` 才会生效。
+  const kids = elementChildren(holder);
+  for (let i = 0; i < kids.length; i++) {
+    if (kids[i] !== list && isMenuTrigger(kids[i])) return kids[i];
+  }
+  return null;
+}
+
+/**
+ * 收集对话标签条的行：标签按钮在前，「更多」始终收尾。
+ *
+ * 「更多」不是 slot 记录，给它固定合成 id（见 `SYNTHETIC_IDS.tabs`），它不能收进自己
+ * 那扇菜单里，所以同时也不会拿到「进更多」。
+ *
+ * @returns 收上来的行；标签条不存在时返回 null。
+ */
+function collectTabUnits(): RowUnit[] | null {
+  const rows = collectTabRows();
+  const more = tabMoreRow();
+  if (!rows && !more) return null;
+  const units: RowUnit[] = [];
+  for (let i = 0; rows && i < rows.length; i++) units.push({ el: rows[i], id: null });
+  if (more) units.push({ el: more, id: MORE_ID, label: t("row.more") });
+  return units.length > 0 ? units : null;
+}
+
 // slot 记录 id 为 null（投影与台账配对），合成的带 id——用量百分比属于 slot 未注册的兄弟节点。
+// 右侧边栏「开始」页的卡片整条都不进台账，id 只能从 DOM 上认（见 `collectRightUnits`）。
 interface RowUnit {
   el: HTMLElement;
   id: string | null;
+  // 元素上现成的显示名：台账没有这条记录时用它，免得设置页与收纳包只显示 kind。
+  label?: string;
 }
 
 function collectComposerUnits(): RowUnit[] | null {
@@ -226,9 +272,96 @@ function collectComposerRows(): HTMLElement[] | null {
   return unitElements(collectComposerUnits());
 }
 
+// 右侧边栏「开始」页的卡片一条都不进 slot 台账：插件用 sidebarRightTabs.register 声明 guide 卡片，
+// 宿主直接画出来，没有 entries 可读、也没有可订阅的槽位。结构是 data-sidebar-right-guide 容器下的
+// 直接子项——每张卡一层包裹盒（里面才是带 data-sidebar-right-guide-entry 的真按钮），末尾的
+// 「更多工具」是另一层包裹盒（里面是 aria-haspopup="menu" 的按钮，只在有槽位注册时才画）。
+// 行元素取包裹盒：真按钮要留着自己响应点击，行只负责排序、收起与右键菜单。
+const RIGHT_CARD_ATTR = "data-sidebar-right-guide-entry";
+const RIGHT_CARD_SELECTOR = "[" + RIGHT_CARD_ATTR + "]";
+
+/**
+ * 包裹盒里那张 guide 卡片的 kind。
+ *
+ * @param wrapper 卡片包裹盒（也可能本身就是按钮）。
+ * @returns kind；不是卡片时返回 null。
+ */
+function rightCardKind(wrapper: HTMLElement): string | null {
+  const own = wrapper.getAttribute(RIGHT_CARD_ATTR);
+  if (own) return own;
+  const button = wrapper.querySelector(RIGHT_CARD_SELECTOR);
+  if (!button) return null;
+  const kind = button.getAttribute(RIGHT_CARD_ATTR);
+  return kind ? kind : null;
+}
+
+/**
+ * 卡片上的标题文字（宿主把标题单独包在 entryTitle 里，整段 textContent 会带上描述）。
+ *
+ * @param wrapper 卡片包裹盒。
+ * @returns 压过空白的标题；认不到时退回整块文字。
+ */
+function rightRowLabel(wrapper: HTMLElement): string {
+  const title = wrapper.querySelector("[class*='entryTitle']");
+  const text = title && title.textContent ? title.textContent : "";
+  if (text) return text.replace(/\s+/g, " ").trim();
+  return rowText(wrapper);
+}
+
+/**
+ * 右侧栏卡片的 id：kind 原样，同 kind 的第 n 张（n 从 2 起）加 `-n` 后缀。
+ *
+ * 投影认 DOM 上的卡片、设置页认宿主注册表，两条路各数一遍卡片；编号规则只留这一处，
+ * 两边的 id 才永远对得上（对不上就会出现「设置页排好的顺序，卡片上不生效」）。
+ *
+ * @param kind 卡片 kind（即 tab kind）。
+ * @param nth 这是第几张同 kind 的卡片，从 1 起。
+ * @returns 卡片 id。
+ */
+function rightIdOf(kind: string, nth: number): string {
+  return nth <= 1 ? kind : kind + "-" + nth;
+}
+
+/**
+ * 收集右侧边栏「开始」页的那些卡片。
+ *
+ * 只收能点开的卡片与「更多工具」：罗盘 hero 是装饰、不是按钮。
+ *
+ * @returns 行与它们的 id（卡片取 kind，多出来那颗固定叫 more）；整页不在屏上时返回 null。
+ */
+function collectRightUnits(): RowUnit[] | null {
+  const list = document.querySelector(RIGHT_LIST_SELECTOR) as HTMLElement | null;
+  if (!list) return null;
+  const children = elementChildren(list);
+  const units: RowUnit[] = [];
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    const kind = rightCardKind(child);
+    if (kind) {
+      // 同一页上可能出现同 kind 的第二张卡（宿主允许多实例），后面那张加序号，免得 id 撞车。
+      let nth = 1;
+      while (units.some(function (unit) { return unit.id === rightIdOf(kind, nth); })) nth++;
+      units.push({ el: child, id: rightIdOf(kind, nth), label: rightRowLabel(child) });
+      continue;
+    }
+    // 「更多工具」没有 kind，只认菜单按钮。
+    if (isMenuTrigger(child)) {
+      if (units.some(function (unit) { return unit.id === "more"; })) continue;
+      units.push({ el: child, id: MORE_ID, label: t("row.more") });
+    }
+  }
+  return units.length > 0 ? units : null;
+}
+
+function collectRightRows(): HTMLElement[] | null {
+  return unitElements(collectRightUnits());
+}
+
 function collectRowUnits(scope: string): RowUnit[] | null {
   if (scope === "composer") return collectComposerUnits();
   if (scope === "sidebar") return collectSidebarUnits();
+  if (scope === "right") return collectRightUnits();
+  if (scope === "tabs") return collectTabUnits();
   const rows = collectRows(scope);
   if (!rows) return null;
   const units: RowUnit[] = [];
@@ -259,56 +392,12 @@ function syntheticIdsOf(scope: string): string[] {
 
 function collectRows(scope: string): HTMLElement[] | null {
   if (scope === "sidebar") return collectSidebarRows();
-  if (scope === "footer") return collectFooterRows() || collectOutletRows("footer");
+  if (scope === "footer") return collectOutletRows("footer");
   if (scope === "tabs") return collectTabRows();
   if (scope === "composer") return collectComposerRows();
+  if (scope === "right") return collectRightRows();
   if (scope === "settings") return collectSettingsRows();
   return null;
-}
-
-// 侧边栏和底栏用 entriesOfSlot（它们的渲染器用的就是它），其余 scope 读原始 entries 数组。
-// 文案缺失（hasLabel 为假）可放心退回位置配对；文案存在却对不上才说明身份存疑（见 pairRows）。
-interface LedgerEntry {
-  id: string;
-  label: string;
-  hasLabel: boolean;
-  order: number;
-}
-
-function readEntries(ctx: CtxLike, scope: string): LedgerEntry[] {
-  const slot = SLOT_OF_SCOPE[scope];
-  const out: LedgerEntry[] = [];
-  let entries: SlotEntry[] | null = null;
-  try {
-    entries = scope === "sidebar" || scope === "footer" ? ctx.slots.entriesOfSlot(slot) : ctx.slots.entries(slot);
-  } catch (err) {
-    return out;
-  }
-  if (!entries) return out;
-  for (let i = 0; i < entries.length; i++) {
-    const options = entries[i].options || {};
-    const id = options.id;
-    if (id === undefined || id === null || id === "") continue;
-    // HIDDEN_LEDGER_IDS 里的记录从台账这一层就剔除，不进列表也不参与配对。
-    if (HIDDEN_LEDGER_IDS.indexOf(String(id)) >= 0) continue;
-    let label: unknown = options.label;
-    if (typeof label === "function") {
-      try {
-        label = (label as () => unknown)();
-      } catch (err2) {
-        label = undefined;
-      }
-    }
-    const hasLabel = typeof label === "string" && label.length > 0;
-    out.push({ id: String(id), label: hasLabel ? (label as string) : String(id), hasLabel: hasLabel, order: options.order || 0 });
-  }
-  // 标签带和输入框按钮带不按 order 排，由官方渲染器排布。
-  if (scope !== "tabs" && scope !== "composer") {
-    out.sort(function (a, b) {
-      return a.order - b.order;
-    });
-  }
-  return out;
 }
 
 /**
@@ -361,185 +450,155 @@ function rowText(el: HTMLElement): string {
 }
 
 /**
- * 把台账记录与屏幕上的行配对。
+ * 宿主「右侧栏标签类型注册表」里的 guide 条目（`sidebarRightTabs.guide()`）。
  *
- * 四步退让：①声明过认领钩子的记录按钩子认领（正证据）；②上次投影的标记；③文案精确匹配；
- * ④没文案的记录按剩余顺序位置配对——只在屏幕上不缺行（行数不少于记录数）时才敢这么猜。
+ * 与卡片此刻在不在屏幕上无关：右栏收着、或正显示别的页面时，注册表照样答得出有哪些卡片、
+ * 各叫什么名字。老宿主的服务表里没有这一项时返回空数组。
  *
- * ④ 的例外是身份错配的根源：记录数多于屏幕元素数，说明有记录整条渲染成空，此时按位置猜会把
- * 后面那条记录的名字扣到别人的元素上（见 `ROW_HOOKS`）。
- *
- * @param entries 该 scope 的台账记录。
- * @param rows 屏幕上收集到的行元素。
- * @param stamped 上次投影留下的 id → 元素映射，用于第 1 步直接认领；省略时跳过这一步。
- * @param scope scope 键，用于查 `ROW_HOOKS` 里声明的认领钩子；省略时不走钩子那一步。
- * @returns 与 entries 一一对应的配对结果，认领不到的行 el 保持为 null。
+ * @param ctx 上下文。
+ * @returns 注册表原始条目；读不出来时为空数组。
  */
-function pairRows(entries: LedgerEntry[], rows: HTMLElement[], stamped?: Record<string, HTMLElement>, scope?: string): Pair[] {
-  const pairs: Pair[] = [];
-  const used: boolean[] = [];
-  for (let i = 0; i < entries.length; i++) pairs.push({ id: entries[i].id, label: entries[i].label, el: null as unknown as HTMLElement, extra: [] });
-
-  // 第 0 步：钩子是正证据，优先级最高——它还能纠正上一次投影留下的错误标记。
-  if (scope) {
-    for (let i = 0; i < entries.length; i++) {
-      const hook = rowHookOf(scope, entries[i].id);
-      if (!hook || !hook.selector) continue;
-      for (let j = 0; j < rows.length; j++) {
-        if (used[j]) continue;
-        if (!rows[j].matches || !rows[j].matches(hook.selector)) continue;
-        pairs[i].el = rows[j];
-        used[j] = true;
-        break;
-      }
+function rightGuideEntries(ctx: CtxLike): Array<{ kind?: unknown; title?: unknown }> {
+  let tabs: unknown = null;
+  try {
+    tabs = ctx.get("sidebarRightTabs");
+  } catch (err) {
+    // 老宿主的服务表里没有这一项：往下退到宽松查询
+  }
+  if (!tabs) {
+    try {
+      tabs = ctx.get("sidebarRightTabs", false);
+    } catch (err) {
+      // 宽松查询也没有：当作老宿主处理
     }
   }
-
-  // 第 1 步：按元素身上现存的 data-lo-id 直接认领。
-  if (stamped) {
-    for (let i = 0; i < entries.length; i++) {
-      const el = stamped[entries[i].id];
-      if (!el) continue;
-      const at = rows.indexOf(el);
-      if (at < 0 || used[at]) continue;
-      pairs[i].el = el;
-      used[at] = true;
-    }
+  const registry = tabs as { guide?: () => unknown } | null;
+  if (!registry || typeof registry.guide !== "function") return [];
+  let entries: unknown = null;
+  try {
+    entries = registry.guide();
+  } catch (err) {
+    // 注册表读不出来就当没有
+    return [];
   }
-
-  // 第 2 步：文案精确匹配（仅限真正提供了文案的记录）。
-  for (let i = 0; i < entries.length; i++) {
-    if (!entries[i].hasLabel) continue;
-    for (let j = 0; j < rows.length; j++) {
-      if (used[j]) continue;
-      if (rowText(rows[j]) === entries[i].label) {
-        pairs[i].el = rows[j];
-        used[j] = true;
-        break;
-      }
-    }
-  }
-
-  // 第 3 步：没文案的记录按顺序认领剩下的行，但只在「剩下的记录数 == 剩下的行数」时才敢猜：
-  // 两边数量不等，说明有记录整条渲染成空（或有行不属于任何记录），按位置猜必然把名字扣错人。
-  // 声明了认领钩子的记录不参与猜：钩子没命中就是没渲染，按位置补一条只会补出影子行
-  // ——注册在这个槽位、实际渲染在别处的插件（Trae / WorkBuddy 的额度读数）正是这样混进来的。
-  const freeEntries: number[] = [];
-  const freeRows: number[] = [];
-  for (let i = 0; i < entries.length; i++) {
-    if (pairs[i].el) continue;
-    if (scope && rowHookOf(scope, entries[i].id)) continue;
-    freeEntries.push(i);
-  }
-  for (let j = 0; j < rows.length; j++) if (!used[j]) freeRows.push(j);
-  if (freeEntries.length !== freeRows.length) return pairs;
-  let at = 0;
-  for (let i = 0; i < entries.length; i++) {
-    if (pairs[i].el) continue;
-    if (scope && rowHookOf(scope, entries[i].id)) continue;
-    pairs[i].el = rows[freeRows[at++]];
-  }
-  return pairs;
-}
-
-// 一条被投影真正标记到的行：id 与给人看的名字，设置页与收纳包据此只列屏幕上存在的行。
-interface LiveRow {
-  id: string;
-  label: string;
-}
-
-/* 每个 scope 上一轮投影标记到的行。
-   - 从未投影过 → undefined，`liveRows` 报 null，调用方回退到台账（插件刚加载、页面还没挂载）；
-   - 投影过但此刻整个不在屏幕上 → null，调用方同样回退到台账；
-   - 投影过且在屏幕上 → 数组，调用方以它为准。 */
-const __liveRows: Record<string, LiveRow[] | null> = {};
-
-/**
- * 记下某 scope 本轮投影标记到的行。
- *
- * @param scope scope 键。
- * @param rows 本轮标记到的行；该 scope 此刻不在屏幕上时传 null。
- */
-function setLiveRows(scope: string, rows: LiveRow[] | null): void {
-  __liveRows[scope] = rows;
+  const list = entries as Array<{ kind?: unknown; title?: unknown }> | null;
+  if (!list || typeof list.length !== "number") return [];
+  // 「更多工具」那颗按钮要等「开始」页画出来才在 DOM 里：第一次启动 DSH、右栏还没开过时，
+  // 按 DOM 探测（`moreAvailableFor`）判不出右栏这扇菜单，设置页的「进更多」就一直灰着
+  // （用户 m00792）。注册表和「开始」页出自宿主同一个包——注册表答得出条目，就说明这个
+  // 页面在本宿主上存在，它渲染的 `sidebar.right.tab.guide.actions` 槽位也在，于是不用等
+  // 右栏第一次打开，直接记成已认领。
+  if (list.length > 0) noteMoreAvailable(MORE_REGION_RIGHT);
+  return list;
 }
 
 /**
- * 读某 scope 上一轮投影标记到的行。
+ * 读一条 guide 条目的标题（宿主现调的函数，走当前语言）。
  *
- * @param scope scope 键。
- * @returns 标记到的行；该 scope 从未投影过或整个不在屏幕上时返回 null（调用方据此回退到台账）。
+ * @param entry guide 条目。
+ * @returns 标题文字；调不出来时为空字符串。
  */
-function liveRows(scope: string): LiveRow[] | null {
-  const rows = __liveRows[scope];
-  return rows === undefined ? null : rows;
+function rightTitleOf(entry: { title?: unknown }): string {
+  try {
+    const title = typeof entry.title === "function" ? (entry.title as () => unknown)() : entry.title;
+    return typeof title === "string" ? title : "";
+  } catch (err) {
+    // 标题走语言服务，调不出来就退回投影记下的名字
+    return "";
+  }
 }
 
 /**
- * 读某 scope 上一轮投影标记到的行 id。
+ * 宿主注册的右侧栏卡片：id 取 tab kind（同 kind 依次加 `-2` 序号），名字取注册标题。
  *
- * @param scope scope 键。
- * @returns id 列表；该 scope 不在屏幕上时返回 null。
+ * 右侧边栏是六处里唯一没有台账的一处。卡片此刻不在屏幕上（右栏收着、或正显示别的页面）时
+ * 投影什么也认不到，可注册表仍然知道有哪些卡片；只认投影就会让设置页那张卡片空着，用户得
+ * 先把右栏翻回「开始」页才能安排顺序（用户 m00519）。名字也一并取自注册表，与悬浮框里
+ * 的样子保持一致（用户 m00432）。
+ *
+ * @param ctx 上下文。
+ * @returns 卡片 id 与名字；老宿主没有注册表时为空数组。
  */
-function liveRowIds(scope: string): string[] | null {
-  const rows = liveRows(scope);
-  if (!rows) return null;
-  const out: string[] = [];
-  for (let i = 0; i < rows.length; i++) out.push(rows[i].id);
+function rightCardList(ctx: CtxLike): Array<{ id: string; label: string }> {
+  const list = rightGuideEntries(ctx);
+  const out: Array<{ id: string; label: string }> = [];
+  const seen: Record<string, number> = {};
+  let i: number;
+  for (i = 0; i < list.length; i++) {
+    const entry = list[i];
+    const kind = entry && typeof entry.kind === "string" ? entry.kind : "";
+    if (!kind) continue;
+    // 同一 kind 在注册表里只有一条，但页面上可能出现第二张卡（id 带 -2）：这里按条数编号，
+    // 与 collectRightUnits 走同一个 `rightIdOf`。
+    const count = (seen[kind] || 0) + 1;
+    seen[kind] = count;
+    out.push({ id: rightIdOf(kind, count), label: rightTitleOf(entry) });
+  }
   return out;
 }
 
 /**
- * 某条台账记录这一轮该不该列出来。
+ * 从宿主的「右侧栏标签类型注册表」取某张卡的名字。
  *
- * 五处槽位用同一把尺子：只列这一轮投影真正标记到的行（`liveRowIds` 的成员）。台账里有记录、
- * DOM 里却没有元素的，一律不列——它们可能注册在这个槽位、实际渲染在别处（Trae / WorkBuddy
- * 的额度读数注册在停靠行、画在对话框里），列出来就是一条点不动、也收纳不掉的影子行。
+ * 卡片的标题由宿主注册的 guide 条目给出（`title()` 走当前语言），与卡片此刻在不在屏幕上无关。
+ * 右栏收着、或正显示别的页面时投影认不到卡片，只按投影取名就会退回 id——同一个按钮在悬浮框里
+ * 时而叫「上下文」、时而叫 `dsh-context`（用户 m00432）；直接问注册表才叫得一致。
  *
- * scope 整个不在屏幕上时（`live` 为 null）同样不列：没有正证据就不假装它在。
- *
- * @param live `liveRowIds` 的结果（null 表示该 scope 不在屏幕上）。
- * @param id 记录 id。
- * @returns 该列则为 true。
+ * @param ctx 上下文。
+ * @param id 卡片 id（即 tab kind；同 kind 的第二张卡带 `-2` 后缀，名字相同）。
+ * @returns 注册表里的名字；老宿主没有这张表时返回空字符串。
  */
-function listedInScope(live: string[] | null, id: string): boolean {
-  return !!live && live.indexOf(id) >= 0;
-}
-
-/**
- * 取某条屏幕上真实存在的行的显示名。
- *
- * @param scope scope 键。
- * @param id 行 id。
- * @returns 该行本轮投影时记下的名字；没有记录时返回空字符串。
- */
-function liveRowLabel(scope: string, id: string): string {
-  const rows = liveRows(scope);
-  if (!rows) return "";
-  for (let i = 0; i < rows.length; i++) if (rows[i].id === id) return rows[i].label;
+function rightTabLabel(ctx: CtxLike, id: string): string {
+  const cards = rightCardList(ctx);
+  let i: number;
+  for (i = 0; i < cards.length; i++) if (cards[i].id === id) return cards[i].label;
+  // 同 kind 的第二张卡在注册表里只有一条，id 却带 -2：按 kind 兜底取同一个标题。
+  const kind = id.replace(/-\d+$/, "");
+  for (i = 0; i < cards.length; i++) if (cards[i].id === kind) return cards[i].label;
   return "";
 }
 
 /**
- * 一行的显示名：插件指定的名字 → 台账文案 → 投影记下的名字（钩子文案或界面文字）→ id。
+ * 一行的显示名：插件指定的名字 → 右侧栏卡片的注册名 → 台账文案 → 投影记下的名字（钩子文案或界面文字）→ id。
  *
- * 悬浮框与「更多」菜单都从这里取名字。两处各写各的取法，同一个按钮就会换个地方换个人名
+ * 悬浮框、「更多」菜单与设置页投影都从这里取名。两处各写各的取法，同一个按钮就会换个地方换个人名
  * ——宿主 DOM 上写的是英文，台账里写的是中文（用户 m09308：同一个 Agent 预设，
  * 一处叫「Agent 预设」，另一处叫宿主的英文名）。
  *
- * @param ctx 上下文，用来读台账。
+ * @param scope 槽位 key。
+ * @param id 行 id。
+ * @param fallback 台账里的非空文案；没有时传 null 或省略。
+ * @param ctx 上下文，用来查右侧栏注册名；省略时不查（设置页投影走这条）。
+ * @returns 该行的显示名。
+ */
+function rowDisplayLabel(scope: string, id: string, fallback?: string | null, ctx?: CtxLike | null): string {
+  const own = rowLabelOf(scope, id);
+  if (own) return own;
+  if (ctx && scope === "right") {
+    const registered = rightTabLabel(ctx, id);
+    if (registered) return registered;
+  }
+  if (fallback) return fallback;
+  const live = liveRowLabel(scope, id);
+  if (live) return live;
+  const hooked = hookLabel(scope, id);
+  if (hooked) return hooked;
+  return id;
+}
+
+/**
+ * 读这一行的台账文案，再按 `rowDisplayLabel` 的统一规则取名（悬浮框与「更多」菜单共用）。
+ *
+ * @param ctx 上下文，用来读台账与右侧栏注册名。
  * @param scope 槽位 key。
  * @param id 行 id。
  * @returns 该行的显示名。
  */
 function rowLabelText(ctx: CtxLike, scope: string, id: string): string {
-  const own = rowLabelOf(scope, id);
-  if (own) return own;
   const entries = readEntries(ctx, scope);
   let entry: LedgerEntry | null = null;
   for (let i = 0; i < entries.length; i++) if (entries[i].id === id) entry = entries[i];
-  if (entry && entry.hasLabel) return entry.label;
-  return liveRowLabel(scope, id) || hookLabel(scope, id) || (entry ? entry.label : "") || id;
+  return rowDisplayLabel(scope, id, entry && entry.hasLabel ? entry.label : null, ctx);
 }
 
 /**
@@ -563,10 +622,9 @@ const loRowIcons: Record<string, string> = {};
  */
 function liveRowIcon(scope: string, id: string): string {
   const key = scope + ":" + id;
-  const nodes = document.querySelectorAll("[" + MARKS.scope + '="' + scope + '"][' + MARKS.id + "]");
-  for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i] as HTMLElement;
-    if (node.getAttribute(MARKS.id) !== id) continue;
+  // 投影记下的元素优先（见 `liveElement`）：这是一次哈希查找，不再扫全部带标记的节点。
+  const node = liveElement(scope, id);
+  if (node) {
     const svg = node.querySelector("svg");
     const html = svg ? svg.outerHTML : "";
     // 空字符串也记：说明原按钮确实没有图标，下次离屏时不必再去猜。
@@ -610,18 +668,6 @@ function rememberRowIcon(scope: string, id: string, el: HTMLElement | null): voi
 }
 
 /**
- * 台账没给文案时，用声明过的钩子文案兜底。
- *
- * @param scope scope 键。
- * @param id 行 id。
- * @returns 钩子里声明的显示名；没声明时返回空字符串。
- */
-function hookLabel(scope: string, id: string): string {
-  const hook = rowHookOf(scope, id);
-  return hook && hook.label ? hook.label : "";
-}
-
-/**
  * 从投影的 style.order 读回屏幕上的顺序。
  *
  * @param scope scope 键。
@@ -642,73 +688,4 @@ function liveOrder(scope: string): string[] {
   const out: string[] = [];
   for (let i = 0; i < rows.length; i++) if (out.indexOf(rows[i].id) < 0) out.push(rows[i].id);
   return out;
-}
-
-/**
- * 按坐标在候选行里做几何命中测试。
- *
- * 几何兜底：pointer-events:none 的行不参与命中测试，只能按坐标硬扫，面积最小者胜；最上层是收纳包、菜单或官方弹窗时放弃。
- *
- * @param selector 候选行的选择器。
- * @param x 视口横坐标。
- * @param y 视口纵坐标。
- * @returns 命中的行元素；最上层是收纳包、菜单或官方弹窗，或没有行覆盖该点时返回 null。
- */
-function rowAtPoint(selector: string, x: number, y: number): HTMLElement | null {
-  const stack = document.elementsFromPoint(x, y);
-  if (stack.length > 0 && stack[0].closest('.lo-stash, .lo-pop, .lo-launcher, [role="dialog"], [role="menu"], [data-shortcut-modal]')) return null;
-  const nodes = document.querySelectorAll(selector);
-  let hit: HTMLElement | null = null;
-  let best = Infinity;
-  for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i] as HTMLElement;
-    const rect = node.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) continue;
-    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) continue;
-    const area = rect.width * rect.height;
-    if (area < best) {
-      best = area;
-      hit = node;
-    }
-  }
-  return hit;
-}
-
-/**
- * 启动器不能上浮到顶部外壳之上：测量顶部外壳的下边缘作为纵向位置的下限。
- *
- * @returns 顶部外壳下边缘再往下留 8 像素后的整数位置；测不到外壳时按 48 计算。
- */
-function topInset(): number {
-  let best = 0;
-  const tabs = document.querySelector("[data-conversation-tabs]");
-  if (tabs) best = Math.max(best, tabs.getBoundingClientRect().bottom);
-  const strips = document.querySelectorAll("[data-window-drag]");
-  for (let i = 0; i < strips.length; i++) best = Math.max(best, strips[i].getBoundingClientRect().bottom);
-  if (best <= 0) best = 48;
-  return Math.round(best) + 8;
-}
-
-function clampLauncherY(y: number, height: number): number {
-  const min = topInset();
-  let max = window.innerHeight - height - 8;
-  if (max < min) max = min;
-  if (typeof y !== "number" || !isFinite(y)) y = min + 24;
-  return Math.max(min, Math.min(max, y));
-}
-
-/**
- * 把启动器的横向位置夹进窗口内。
- *
- * 横向只保证按钮完整留在窗口里，不吸附：拖动过程中它就是鼠标位置，贴哪一侧等松手再定。
- *
- * @param x 期望的横坐标。
- * @param width 启动器宽度。
- * @returns 夹紧后的横坐标，最小 8、最大不超过窗口右边缘减 8；x 不是有限数时返回 8。
- */
-function clampLauncherX(x: number, width: number): number {
-  let max = window.innerWidth - width - 8;
-  if (max < 8) max = 8;
-  if (typeof x !== "number" || !isFinite(x)) x = 8;
-  return Math.max(8, Math.min(max, x));
 }

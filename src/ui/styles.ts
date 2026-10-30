@@ -5,11 +5,18 @@ const CSS_TEXT: string[] = [
   "[data-lo-draggable='1']{cursor:grab;-webkit-user-select:none;user-select:none;transition:opacity .14s ease,box-shadow .12s ease,transform .14s ease}",
   "[data-lo-draggable='1']:active{cursor:grabbing}",
   "[data-lo-dragging='1']{cursor:grabbing;opacity:.45}",
+  // 拖到「更多」入口上时的落点提示：这颗按钮马上就要把被拖的那行收进去（用户 m04058）。
+  "[data-lo-over='1']{box-shadow:0 0 0 2px var(--dsw-alias-brand-primary,#4d6bfe) inset;border-radius:var(--dsw-radius-md,12px)}",
   "[data-lo-hidden='1']{display:none !important}",
   // 淡下去的是这一行，但「带它回来的那个入口」不跟着淡：进更多的行，「更多」那颗按钮照常醒目；
   // 进悬浮框的行，「恢复」那颗照常醒目（用户 m09308#1）。
   ".lo-row[data-hidden='1']>*{opacity:.5}",
   ".lo-row[data-hidden='1']>[data-lit='1']{opacity:1}",
+
+  // 右侧边栏「开始」页的容器是 flex，宿在其末尾挂了个 `::after{content:"";flex:0 10%}` 当底部留白。
+  // 伪元素的 order 是 0，而我们给卡片写的 order 也从 0 起：同值按树序排，那块留白就被挤到第一张
+  // 卡片后面，看起来像中间空了一大截。把它推到所有行之后，留白回到容器底部（它本来的位置）。
+  "div[data-sidebar-right-guide]::after{order:2147483600}",
 
   // 官方块与第三方块之间的分割线：同为 body 级元素，按 scope 各存一份。
   ".lo-divider{background:var(--dsw-alias-border-l2);border-radius:2px}",
@@ -31,7 +38,10 @@ const CSS_TEXT: string[] = [
   // 位置全由行内样式给出：启动器可拖动，吸附到松手时所在的那条边。
   ".lo-launcher{position:fixed;z-index:" + Z_LAUNCHER + ";display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 11px;border:0;border-radius:999px;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-inverted,#fff);font:inherit;font-size:12px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.28);cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:box-shadow .14s ease,opacity .14s ease}",
   ".lo-launcher:hover{box-shadow:0 10px 26px rgba(0,0,0,.34)}",
-  ".lo-launcher[data-dragging='1']{cursor:grabbing;opacity:.85;transition:none}",
+  // 拖一行过来悬在启动器上：虚线外圈说明「松手就收进这里」。
+  ".lo-launcher[data-lo-stash-over='1']{outline:2px dashed currentColor;outline-offset:3px;box-shadow:0 10px 26px rgba(0,0,0,.34)}",
+  // 设置页的两个新落点（用户 m05013）：拖到本插件的页面上松手 = 收起。
+  ".lo-page[data-lo-stash-over='1']{outline:2px dashed currentColor;outline-offset:-8px;border-radius:10px}",
   ".lo-launcher-count{display:inline-flex;align-items:center;justify-content:center;min-width:17px;height:17px;padding:0 5px;border-radius:999px;background:rgba(127,127,127,.35);font-size:11px;line-height:1}",
 
   ".lo-mask{position:fixed;inset:0;z-index:" + Z_MASK + ";background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,.32));backdrop-filter:blur(2px);animation:lo-fade .14s ease}",
@@ -65,7 +75,12 @@ const CSS_TEXT: string[] = [
   // 组标题上的恢复按钮比行内的更小：它是分组级的次级动作，不该和每行的「恢复」抢注意力。
   // 字重压回 400：分组标题行是 600，按钮继承下来会显得加粗，和旁边的标题一样重。
   ".lo-stash-group .lo-btn{flex:0 0 auto;min-height:22px;padding:0 8px;font-size:11px;font-weight:400;border-radius:6px;text-transform:none;letter-spacing:0;cursor:pointer}",
-  ".lo-stash-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px}",
+  // 面板本身要能上下滚动，所以只留给浏览器纵向手势；横向手势仍然交给我们（拖出去恢复）。
+  // 全写 none 会让面板在触屏上滚不动，全写 auto 又会让纵向拖动被当成滚动。
+  ".lo-stash-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;touch-action:pan-y;user-select:none}",
+  // 拖出面板（松手就恢复）：压暗 + 虚线，和面板里「正在拖」的状态区分开。
+  // 拖动过程中没有东西跟着指针走——原行留在原地压暗，指针离开面板范围才补上虚线（用户 m07265）。
+  ".lo-stash-row.lo-stash-out{opacity:.45;outline:2px dashed var(--dsw-alias-brand-primary,#4d6bfe);outline-offset:-2px}",
   ".lo-stash-row:hover{background:var(--dsw-alias-bg-layer-1)}",
   // 恢复按钮不参与收缩，也不换行：标签再长也只占它自己的量，名字那一侧自己打点。
   ".lo-stash-row>.lo-btn{flex:0 0 auto;white-space:nowrap}",
@@ -188,7 +203,6 @@ const CSS_TEXT: string[] = [
   ".lo-btn[data-variant='primary']{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-inverted,#fff)}",
   // 主按钮悬停保持自己的配色
   ".lo-btn[data-variant='primary']:hover:not(:disabled){background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-inverted,#fff);filter:brightness(1.08)}",
-  ".lo-btn[data-variant='ghost']{border-color:transparent}",
   // 中性底色的一档：给「出更多 / 恢复」这类「往回退」的动作。原先一个用实心黑（brand
   // primary）、另一个只留描边，同一行里看着像两个不同等级的动作（用户图3 反馈），
   // 现在两者共用这一块灰底，谁也不会比谁更「重」。
@@ -204,11 +218,13 @@ const CSS_TEXT: string[] = [
   ".lo-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:9px;-webkit-user-select:none;user-select:none;transition:background .12s ease}",
   ".lo-row *{-webkit-user-select:none;user-select:none}",
   ".lo-row:hover{background:var(--dsw-alias-bg-layer-2)}",
-  ".lo-row[data-dragging='1']{opacity:.4}",
+  // 行被拖出本插件的设置页（松手就恢复，用户 m07052）：与收纳包拖出面板同一种提示。
+  ".lo-row.lo-list-out{outline:2px dashed var(--dsw-alias-brand-primary,#4d6bfe);outline-offset:-2px}",
   // 落点提示复用正文那两条虚线，不在行上画 box-shadow。
   ".lo-row[data-lo-dragging='1']{cursor:grabbing}",
   ".lo-grip{flex:0 0 auto;width:14px;text-align:center;color:var(--dsw-alias-label-secondary);font-size:11px;line-height:1;letter-spacing:-1px;cursor:grab}",
-  ".lo-grip[data-locked='1']{opacity:.28;cursor:default}",
+  // 钉住的「更多」入口不能拖：把手藏起来（visibility 仍占着那 14px，行名不会左移），光标也不再是抓取
+  ".lo-grip[data-locked='1']{visibility:hidden;cursor:default}",
   // 名称区是一块可点区域：吃掉行内剩余宽度，点它跳转到这个按钮对应的页面（与收纳包同一行为）。
   ".lo-row-open{flex:1 1 0;min-width:0;overflow:hidden;display:flex;align-items:center;gap:8px;padding:0;border:0;border-radius:7px;background:transparent;font:inherit;text-align:left;cursor:pointer}",
   ".lo-row-open:hover .lo-row-name{color:var(--dsw-alias-brand-primary)}",
@@ -220,8 +236,6 @@ const CSS_TEXT: string[] = [
   ".lo-row-ico{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;overflow:hidden;border-radius:4px;color:var(--dsw-alias-label-secondary)}",
   ".lo-row-ico>svg{width:16px;height:16px}",
   ".lo-row-ico-text{background:var(--dsw-alias-interactive-bg-hover,#2631480f);font-size:10px;font-weight:600}",
-  ".lo-groupbar{display:flex;align-items:center;gap:8px;padding:9px 8px 3px;font-size:11px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--dsw-alias-label-secondary)}",
-  ".lo-groupbar::after{content:'';flex:1 1 auto;height:1px;background:var(--dsw-alias-border-l1)}",
   ".lo-note{padding:8px 14px;font-size:12px;line-height:1.6;color:var(--dsw-alias-label-secondary)}",
   ".lo-warn{margin:0;padding:9px 13px;border:1px solid var(--dsw-alias-state-warn-primary);border-radius:10px;font-size:12px;line-height:1.55;color:var(--dsw-alias-state-warn-primary)}",
 
@@ -231,7 +245,6 @@ const CSS_TEXT: string[] = [
   ".lo-keys:hover{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}",
   ".lo-keys[data-recording='1']{border-style:solid;border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}",
   ".lo-keys[data-empty='1']{color:var(--dsw-alias-label-secondary)}",
-  ".lo-key{padding:1px 6px;border:1px solid var(--dsw-alias-border-l1);border-radius:5px;background:var(--dsw-alias-bg-layer-2);font-size:11px}",
   ".lo-shortcut-msg{display:block;padding:0 14px 10px;font-size:12px;line-height:1.5}",
   // 行内内边距清零，紧贴键帽框右侧
   ".lo-keyrow .lo-shortcut-msg{padding:0;flex:0 1 auto}",
@@ -246,6 +259,8 @@ const CSS_TEXT: string[] = [
   ".lo-row>.lo-btn[data-act='kind']{flex:0 0 auto;width:84px;padding:0 6px;overflow:hidden;text-overflow:ellipsis}",
   ".lo-row>.lo-btn[data-act='more']{flex:0 0 auto;width:96px;padding:0 8px;overflow:hidden;text-overflow:ellipsis}",
   ".lo-row>.lo-btn[data-act='stash']{flex:0 0 auto;width:64px;padding:0 8px;overflow:hidden;text-overflow:ellipsis}",
+  // 不能进「更多」的行（设置页导航行与三颗「更多」入口）画的是禁用按钮，
+  // 宽度照样占满这一列，同一张卡片里的名称区才能左右对齐。
 
   // 「更多」菜单里本插件收进来的行。宿主那两条菜单项是本插件插不进去的 JSX，只能让这一侧
   // 对齐到它们：同一套盒模型（30px 高、4px 8px 内边距、6px 间隔、13px/20px 字），
@@ -255,9 +270,9 @@ const CSS_TEXT: string[] = [
   ".lo-more-row:hover{background:var(--dsw-alias-interactive-bg-hover,#2631480f)}",
   ".lo-more-row:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px}",
   ".lo-more-dragging{opacity:.6}",
+  // 拖出菜单（松手就移出「更多」）：整行压暗并画虚线，与「正在排序」区分开。
+  ".lo-more-out{opacity:.45;outline:2px dashed var(--dsw-alias-brand-primary,#4d6bfe);outline-offset:-2px}",
   ".lo-more-text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-  // 菜单里不显示 id：宿主菜单本来就窄，一行里塞下 id 会把名称挤没。
-  ".lo-more-row .lo-row-id{display:none}",
   // 官方块与第三方块之间那条线，与页面上的 .lo-divider 是两回事，由「更多」菜单自己的开关控制。
   ".lo-more-divider{height:1px;margin:4px 6px;background:var(--dsw-alias-border-l1)}",
   // 启动器图标：与侧边栏里的按钮同一套画布，14 见方；靠 currentColor 吃按钮的前景色。
@@ -267,20 +282,20 @@ const CSS_TEXT: string[] = [
   "@keyframes lo-rise{from{opacity:0;transform:translate(-50%,-46%)}to{opacity:1;transform:translate(-50%,-50%)}}"
 ];
 
-let loStyleEl: HTMLStyleElement | null = null;
-
 function installStyles(): void {
   const selector: string = 'style[data-plugin="' + PLUGIN_ID + '"]';
-  const existing: HTMLStyleElement | null = document.querySelector<HTMLStyleElement>(selector);
+  const css: string = CSS_TEXT.join("\n");
+  const existing: HTMLStyleElement | null = document.querySelector(selector);
   if (existing) {
-    loStyleEl = existing;
+    // 插件升级后前端会被就地替换，而旧的 <style> 还挂在页面上：这里刷新一次内容，
+    // 否则整套规则要等到卸载才跟着走，新版本看起来「改了没生效」。
+    if (existing.textContent !== css) existing.textContent = css;
     return;
   }
   const node: HTMLStyleElement = document.createElement("style");
   node.setAttribute("data-plugin", PLUGIN_ID);
-  node.textContent = CSS_TEXT.join("\n");
+  node.textContent = css;
   document.head.appendChild(node);
-  loStyleEl = node;
 }
 
 function removeStyles(): void {
@@ -289,5 +304,4 @@ function removeStyles(): void {
     const node: HTMLStyleElement = nodes[i];
     if (node.parentNode) node.parentNode.removeChild(node);
   }
-  loStyleEl = null;
 }

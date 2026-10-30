@@ -53,8 +53,7 @@ function ShortcutCard(props: ShortcutCardProps): any {
   const pair = useState<ShortcutReport | null>(null);
   const report = pair[0];
   const setReport = pair[1];
-  const tickPair = useState(0);
-  const setTick = tickPair[1];
+  const setTick = useState(0)[1];
   const recordingPair = useState(false);
   const recording = recordingPair[0];
   const setRecording = recordingPair[1];

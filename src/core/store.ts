@@ -12,17 +12,16 @@ function defaultState(): PluginState {
   const state: PluginState = {
     version: STATE_VERSION,
     options: {
-      allowDragOfficial: false,
-      // 缺省打开；要真正混排还需 allowDragOfficial 也打开（见 mixedOrder）。
+      // 通用设置里的开关出厂全部打开：新装就有完整能力，想关再自己关。
+      allowDragOfficial: true,
+      // 要真正混排还需 allowDragOfficial 也打开（见 mixedOrder）。
       mixGroups: true,
-      showDivider: false,
+      showDivider: true,
       dividers: {},
       showStashLauncher: true,
-      separateMore: false,
+      separateMore: true,
       collapsed: {},
-      launcherSide: "right",
-      // 横向跟手只落在手势状态里，store 侧不记录拖动中的横坐标；松手后贴左 / 贴右由 launcherSide 决定。
-      launcherX: null,
+      launcherSide: LAUNCHER_SIDE_DEFAULT,
       // null 表示「顶栏下方紧跟的位置」；数字表示距窗口顶部的像素距离。
       launcherY: null
     },
@@ -69,35 +68,61 @@ function asStringMap(value: unknown): Record<string, string[]> {
 }
 
 /**
+ * 清掉「进更多」表里不属于任何可收槽位的键。
+ *
+ * 键是 `scope:id`，scope 里不含冒号，取第一个冒号前那截比对 `MORE_SCOPES` 即可。
+ *
+ * @param intoMore 「进更多」状态表，原地删键。
+ */
+function dropIntoMoreScopes(intoMore: Record<string, boolean>): void {
+  const keys = Object.keys(intoMore);
+  let i;
+  for (i = 0; i < keys.length; i++) {
+    const at = keys[i].indexOf(":");
+    const scope = at > 0 ? keys[i].slice(0, at) : keys[i];
+    if (MORE_SCOPES.indexOf(scope) < 0) delete intoMore[keys[i]];
+  }
+}
+
+/**
  * 读不出来的内容回退默认值，损坏的键不会把设置页弄死。
  *
  * @param raw 从 localStorage 解析出的原始值，可能缺字段或类型不对。
- * @returns 归一化后的状态：版本对不上就整份回退默认值，其余按字段校验。
+ * @returns 归一化后的状态：旧版本按字段补齐默认值就地升级，比当前还新的版本整份回退默认值。
  */
 function normalizeState(raw: unknown): PluginState {
   const base = defaultState();
   const source = asObject(raw);
-  if (source.version !== STATE_VERSION) return base;
+  // 旧版本（版本号更小）是升级路径：认识的字段原样保留，新版本才有的字段缺着就取新默认。
+  // 只有比当前版本还新的存档才整份丢弃——那是旧版插件读新版状态，字段语义不可信。
+  const version = source.version;
+  if (typeof version !== "number" || !isFinite(version) || version > STATE_VERSION) {
+    if (typeof console !== "undefined" && typeof version === "number") {
+      console.warn("[layout-organizer] state version " + version + " is newer than " + STATE_VERSION + ", falling back to defaults");
+    }
+    return base;
+  }
 
   const options = asObject(source.options);
-  base.options.allowDragOfficial = options.allowDragOfficial === true;
-  // 缺省即打开：老数据里没有这个键。
-  base.options.mixGroups = options.mixGroups !== false;
-  base.options.showDivider = options.showDivider === true;
+  // 缺键取新默认（出厂全部打开），有键按存值：升级上来的用户显式关掉的开关不会被强行打开。
+  base.options.allowDragOfficial = typeof options.allowDragOfficial === "boolean" ? options.allowDragOfficial : base.options.allowDragOfficial;
+  base.options.mixGroups = typeof options.mixGroups === "boolean" ? options.mixGroups : base.options.mixGroups;
+  base.options.showDivider = typeof options.showDivider === "boolean" ? options.showDivider : base.options.showDivider;
   // per-scope 分隔线开关：只接受布尔值，缺省视为开。
   base.options.dividers = asBoolMap(options.dividers) as Record<string, boolean>;
-  base.options.showStashLauncher = options.showStashLauncher !== false;
-  // 缺省关闭：老数据没有这个键，保持两处「更多」共用一份清单。
-  base.options.separateMore = options.separateMore === true;
+  base.options.showStashLauncher = typeof options.showStashLauncher === "boolean" ? options.showStashLauncher : base.options.showStashLauncher;
+  base.options.separateMore = typeof options.separateMore === "boolean" ? options.separateMore : base.options.separateMore;
   base.options.collapsed = asBoolMap(options.collapsed) as Record<string, boolean>;
   const launcherSide = options.launcherSide;
-  base.options.launcherSide = typeof launcherSide === "string" && LAUNCHER_SIDES.indexOf(launcherSide) >= 0 ? launcherSide : "right";
-  const launcherX = options.launcherX;
-  base.options.launcherX = typeof launcherX === "number" && isFinite(launcherX) ? launcherX : null;
+  base.options.launcherSide = typeof launcherSide === "string" && LAUNCHER_SIDES.indexOf(launcherSide) >= 0 ? launcherSide : LAUNCHER_SIDE_DEFAULT;
   const launcherY = options.launcherY;
   base.options.launcherY = typeof launcherY === "number" && isFinite(launcherY) ? launcherY : null;
   base.hidden = asBoolMap(source.hidden);
   base.intoMore = asBoolMap(source.intoMore);
+  // 设置页导航行不再能收进「更多」（1.3.0 起，见 MORE_SCOPES）：老状态里残留的 settings:* 记录
+  // 会一直躺在清单里，顺手清掉。投影那边本来也不会再把它们藏起来（moreScopeOk 为假），
+  // 这里只是不让废键越攒越多。
+  dropIntoMoreScopes(base.intoMore);
   base.moreOrder = asStringMap(source.moreOrder);
   base.kinds = asObject(source.kinds) as Record<string, string>;
   const stashSort = source.stashSort;
@@ -124,15 +149,37 @@ function normalizeState(raw: unknown): PluginState {
 function readState(): PluginState {
   try {
     const text = window.localStorage.getItem(STORAGE_KEY);
-    if (!text) return defaultState();
-    return normalizeState(JSON.parse(text));
+    if (text) return normalizeState(JSON.parse(text));
+    // 当前键读不到：可能是刚从旧版本升级上来，试一遍旧键。读得出来就升格到当前键并删掉旧键
+    // （留着也没人读，只会越攒越多）。旧键坏掉不影响继续找更早的那一个。
+    let i;
+    for (i = 0; i < LEGACY_STORAGE_KEYS.length; i++) {
+      const legacyKey = LEGACY_STORAGE_KEYS[i];
+      const legacyText = window.localStorage.getItem(legacyKey);
+      if (!legacyText) continue;
+      let migrated: PluginState;
+      try {
+        const parsed = JSON.parse(legacyText) as PluginState | null;
+        // 版本比当前还新的旧键（装过更新的实验版）不认，直接跳过：拿它当本版状态会读错字段。
+        if (!parsed || typeof parsed.version !== "number" || parsed.version > STATE_VERSION) continue;
+        migrated = normalizeState(parsed);
+      } catch (err) {
+        if (typeof console !== "undefined") console.warn("[layout-organizer] legacy state read failed:", legacyKey, err);
+        continue;
+      }
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+      window.localStorage.removeItem(legacyKey);
+      return migrated;
+    }
+    return defaultState();
   } catch (err) {
+    // 存档解析不了（手改坏了、别的版本写的、localStorage 被禁）：退回出厂状态，至少留一条可查的记录。
+    if (typeof console !== "undefined") console.warn("[layout-organizer] state read failed:", err);
     return defaultState();
   }
 }
 
-// 修订号在监听器跑完后自增；重渲染由紧随其后的 notifyRevision 通知订阅者驱动（见 useRevisionTick）。
-let __storeRevision = 0;
+// 重渲染信号：投影落地或 store 变更后由 notifyRevision 通知这些订阅者（见 useRevisionTick）。
 const __revisionListeners: Array<() => void> = [];
 
 function subscribeRevision(fn: () => void): () => void {
@@ -172,18 +219,47 @@ function useRevisionTick(): number {
   return tick;
 }
 
+// 落盘有 180ms 防抖，页面被收起或关掉时最后一次拖动很可能还在定时器里，
+// 所以在 pagehide 时补一次同步落盘。登记的是每间 store 自己的补写函数：热替换后新旧两间
+// 都还在的话，各自写回自己那份状态，不会只剩最后一间。
+const __flushStore: Array<() => void> = [];
+window.addEventListener("pagehide", function () {
+  for (let i = 0; i < __flushStore.length; i++) {
+    try {
+      __flushStore[i]();
+    } catch (err) {
+      // 一间写失败不能挡住其他几间
+    }
+  }
+});
+
 function createStore(): StoreHandle {
   let state = readState();
   const listeners: Array<(state: PluginState) => void> = [];
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let saveFailed = false;
 
   function persist(): void {
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (err) {
-      // 隐私模式 / 配额超限：保持内存里的 state 继续可用
+      // 隐私模式 / 配额超限：保持内存里的 state 继续可用。只报一次，别每次防抖落盘都刷一行。
+      if (!saveFailed) {
+        saveFailed = true;
+        if (typeof console !== "undefined") console.warn("[layout-organizer] state save failed:", err);
+      }
     }
   }
+
+  // 立刻落盘：把防抖定时器里那一次提前兑现（pagehide 走这条）。
+  function flush(): void {
+    if (timer) {
+      window.clearTimeout(timer);
+      timer = null;
+    }
+    persist();
+  }
+  __flushStore.push(flush);
 
   function emit(): void {
     const snapshot = listeners.slice();
@@ -212,8 +288,7 @@ function createStore(): StoreHandle {
       const next = mutator(state);
       if (next) state = next;
       emit();
-      // 监听器跑完后再自增修订号并通知 React 侧订阅者。
-      __storeRevision += 1;
+      // 监听器跑完后再通知 React 侧订阅者。
       notifyRevision();
       if (timer) window.clearTimeout(timer);
       timer = window.setTimeout(function () {
@@ -238,7 +313,14 @@ function kindOf(state: PluginState, scope: string, id: string): string {
   const manual = state.kinds[scope + ":" + id];
   if (manual === "official" || manual === "third") return manual;
   const official = OFFICIAL_IDS[scope] || [];
-  return official.indexOf(id) >= 0 ? "official" : "third";
+  if (official.indexOf(id) >= 0) return "official";
+  // 右侧边栏同 kind 的第二张卡 id 是 `kind-2`（见 collectRightUnits），判官方要看基础 kind，
+  // 否则第二张「工作区文件」会被当成第三方，拖动、分隔线与改判全错。
+  if (scope === "right") {
+    const cut = id.lastIndexOf("-");
+    if (cut > 0 && /^\d+$/.test(id.slice(cut + 1)) && official.indexOf(id.slice(0, cut)) >= 0) return "official";
+  }
+  return "third";
 }
 
 function groupOf(state: PluginState, scope: string, id: string): string {
@@ -293,53 +375,99 @@ function isIntoMore(state: PluginState, scope: string, id: string): boolean {
 }
 
 /**
- * 这个槽位能不能收进「更多」菜单：只有侧边栏与对话区那几个列表可以，设置行不行。
+ * 这个槽位能不能收进「更多」菜单：只有侧边栏、对话区与右侧边栏那几个列表可以。
+ *
+ * 设置页导航行不行——设置弹窗里没有「更多」，收走了在设置页里就没有别的入口。
  *
  * @param scope 槽位 key。
  * @returns 可以收进「更多」时为真。
  */
 function moreScopeOk(scope: string): boolean {
   if (MORE_SCOPES.indexOf(scope) < 0) return false;
-  return moreAvailable();
+  return moreAvailableFor(moreRegionOf(scope));
 }
 
 /**
- * 这一版宿主有没有「更多」这扇菜单。
+ * 这一行能不能被收进「更多」：位置本身有「更多」，且它自己不是那扇菜单的入口。
  *
- * 侧边栏与对话页那两处是同一个版本（0.2.1-rc.3）里一起加的，故用侧边栏那颗按钮当判据：
- * 它只在 `sidebar.panellist.actions` 真有内容时才被宿主画出来（`hasEntryActions`），
- * 所以「列表里有没有一颗带 `aria-haspopup` 的按钮」本身就是宿主的自我声明——
- * 比读版本号可靠：不用解析版本字符串，也不怕以后侧边栏换皮。
- *
- * 老宿主上这个判断为假，于是「进更多」这类按钮干脆不画，也就不会出现「点完行消失、
- * 却没有菜单能把它点回来」的死路（设置页那行按钮、悬浮包那行按钮、右键菜单都走同一道闸门）。
- *
- * @returns 宿主支持「更多」时为真。
- */
-let loMoreSeen = false;
-
-function moreAvailable(): boolean {
-  if (loMoreSeen) return true;
-  if (typeof document === "undefined" || !document.querySelector) return false;
-  const list = document.querySelector("nav[class*='panelList'], [class*='panelList']");
-  if (!list || !list.querySelector) return false;
-  return list.querySelector("button[aria-haspopup='menu']") !== null;
-}
-
-/**
- * 记下「这一版宿主确实有『更多』」——投影认领到那颗按钮时调用。
- *
- * 认到一次之后本会话内不再探测：那个 DOM 查询每次渲染都做一遍没必要，而菜单不会中途消失。
- */
-function noteMoreAvailable(): void {
-  loMoreSeen = true;
-}
-
-/**
- * 一处「更多」菜单归哪边：侧边栏那一处管面板行与底部按钮，对话那一处管标签与停靠行。
+ * 三颗「更多」入口收进去就再也点不开了，所以永远不能收（用户 m01316、m02576#2）；
+ * 其余不能收的还有设置页导航（见 `moreScopeOk`）。设置页卡片、收纳包面板与右键菜单
+ * 三处都用这一条，免得某处漏判。
  *
  * @param scope 槽位 key。
- * @returns `sidebar` 或 `conversation`。
+ * @param id 行 id。
+ * @returns 可以收进「更多」时为真。
+ */
+function canTuckIntoMore(scope: string, id: string): boolean {
+  return moreScopeOk(scope) && !isMoreEntry(scope, id);
+}
+
+/**
+ * 这一版宿主的某一处「更多」菜单在不在。
+ *
+ * 三处菜单各由不同的槽位驱动，可能只存在其中一处：侧边栏那扇要看 `panelList` 里有没有
+ * `aria-haspopup` 的按钮；对话页那扇挂在标签条容器的兄弟位；右侧栏「更多工具」只由
+ * `sidebar.right.tab.guide.actions` 驱动（见 collectRightUnits）。按归属分别探测，
+ * 才不会出现「只有右栏有菜单，左侧栏的行却被判成能收」这种收走就找不回来的死路。
+ *
+ * 老宿主上探测为假，于是「进更多」这类按钮干脆不画，也就不会出现「点完行消失、
+ * 却没有菜单能把它点回来」的死路（设置页那行按钮、悬浮包那行按钮、右键菜单都走同一道闸门）。
+ *
+ * @param region `sidebar` / `conversation` / `rightbar`。
+ * @returns 该处菜单存在时为真。
+ */
+const loMoreSeen: Record<string, boolean> = {};
+// 没探到时的短缓存：投影每帧对每一行都要问一次，DOM 查询不能真的每行每帧都做一遍。
+const loMoreProbe: Record<string, { at: number; ok: boolean }> = {};
+const MORE_PROBE_TTL_MS = 250;
+
+function moreAvailableFor(region: string): boolean {
+  if (loMoreSeen[region] === true) return true;
+  if (typeof document === "undefined" || !document.querySelector) return false;
+  const now = Date.now();
+  const memo = loMoreProbe[region];
+  if (memo && now - memo.at < MORE_PROBE_TTL_MS) return memo.ok;
+  let host: Element | null = null;
+  if (region === "rightbar") {
+    host = document.querySelector(RIGHT_LIST_SELECTOR);
+  } else if (region === "conversation") {
+    const tabs = document.querySelector("[data-conversation-tabs]");
+    host = tabs ? tabs.parentElement : null;
+  } else {
+    host = document.querySelector("nav[class*='panelList'], [class*='panelList']");
+  }
+  const ok = !!(host && host.querySelector("button[aria-haspopup='menu']"));
+  if (ok) loMoreSeen[region] = true;
+  loMoreProbe[region] = { at: now, ok: ok };
+  return ok;
+}
+
+/**
+ * 宿主有没有任何一处「更多」菜单：设置页的菜单分隔线开关、行上的「进更多」按钮按它显示。
+ *
+ * @returns 任意一处存在时为真。
+ */
+function moreAvailable(): boolean {
+  return moreAvailableFor("sidebar") || moreAvailableFor("conversation") || moreAvailableFor("rightbar");
+}
+
+/**
+ * 记下某一处「更多」确实存在——投影认领到那颗按钮时调用。
+ *
+ * 认到一次之后本会话内不再探测那一处：DOM 查询每次渲染都做一遍没必要，而菜单不会中途消失。
+ *
+ * @param region `sidebar` / `conversation` / `rightbar`。
+ */
+function noteMoreAvailable(region: string): void {
+  loMoreSeen[region] = true;
+}
+
+/**
+ * 一处「更多」菜单归哪边：侧边栏那一处管它自己顶部与底部的按钮（设置页导航不收进任何一处）；
+ * 对话那一处管顶部标签与输入框下方；右侧边栏「开始」页那一处管它自己的卡片。
+ *
+ * @param scope 槽位 key。
+ * @returns `sidebar` / `conversation` / `rightbar`。
  */
 function moreRegionOf(scope: string): string {
   const home = MORE_SCOPE_HOME[scope];
@@ -349,34 +477,21 @@ function moreRegionOf(scope: string): string {
 /**
  * 一处「更多」菜单这一轮该列出哪些槽位的行。
  *
- * 打开「分开收纳」时按归属分流：侧边栏那处只收侧边栏与底部按钮，对话那处只收标签与停靠行。
- * 关闭时两处共用一份清单——收进任何一处，两处都列得出来。右侧栏「更多工具」例外：它不参与
- * 分流，永远列全部（用户要求）。
+ * 打开「分开收纳」时按归属分流：侧边栏那处只列侧边栏顶部与底部的按钮，对话那处只列顶部标签与
+ * 输入框下方的行，右侧栏「更多工具」只列它自己「开始」页的卡片。关闭时三处共用一份清单——
+ * 收进任何一处，三处都列得出来。
  *
  * @param state 当前状态。
  * @param region `sidebar` / `conversation` / `rightbar`。
  * @returns 该菜单该读的槽位 key 列表。
  */
 function moreScopesIn(state: PluginState, region: string): string[] {
-  if (!moreAvailable()) return [];
-  if (region === MORE_REGION_ALL) return MORE_SCOPES.slice();
+  if (!moreAvailableFor(region)) return [];
   if (state.options.separateMore !== true) return MORE_SCOPES.slice();
   const out: string[] = [];
   let i;
   for (i = 0; i < MORE_SCOPES.length; i++) if (moreRegionOf(MORE_SCOPES[i]) === region) out.push(MORE_SCOPES[i]);
   return out;
-}
-
-/**
- * 这处菜单的行顺序记在哪个键下。
- *
- * 右侧栏那扇与左侧栏共用一份顺序：两扇菜单列的是同一批按钮，在哪边拖都该同步。
- *
- * @param region 菜单归属。
- * @returns 存 `moreOrder` 时用的键。
- */
-function moreOrderRegion(region: string): string {
-  return region === MORE_REGION_ALL ? MORE_REGIONS[0] : region;
 }
 
 /**
@@ -390,6 +505,33 @@ function moreDividerOn(state: PluginState): boolean {
   if (state.options.showDivider !== true) return false;
   const map = state.options.dividers || {};
   return map.more !== false;
+}
+
+/**
+ * 把一行收进「更多」菜单的待选清单里（`moreRowsIn` 三轮补充共用）。
+ *
+ * 挡的是三颗「更多」入口（它们自己就是打开菜单的开关），不是所有合成行：
+ * 输入框下方的 `context-meter` 也是合成行，拿 `isSynthetic` 当闸门会让它收进「更多」后两边都找不到（用户 m04681）。
+ *
+ * @param state 当前状态。
+ * @param picked 待选清单，原地追加。
+ * @param seen 已收录的 `scope:id`，原地登记。
+ * @param scope 行所在槽位。
+ * @param id 行 id。
+ */
+function pickMoreRow(
+  state: PluginState,
+  picked: Array<{ scope: string; id: string }>,
+  seen: Record<string, boolean>,
+  scope: string,
+  id: string
+): void {
+  const key = scope + ":" + id;
+  if (seen[key]) return;
+  if (isMoreEntry(scope, id)) return;
+  if (!isIntoMore(state, scope, id)) return;
+  seen[key] = true;
+  picked.push({ scope: scope, id: id });
 }
 
 /**
@@ -433,7 +575,7 @@ function moreRowsIn(state: PluginState, region: string): Array<{ scope: string; 
     const ids: string[] = [];
     const order = state.order[scope] || [];
     for (j = 0; j < order.length; j++) ids.push(order[j]);
-    const live = liveOrder(scope) || [];
+    const live = liveOrder(scope);
     for (j = 0; j < live.length; j++) if (ids.indexOf(live[j]) < 0) ids.push(live[j]);
     // 还有既不在页面顺序、也不在屏幕上的行（面板没挂载过）：按 id 补最后，保证列得出来。
     const map = state.intoMore;
@@ -447,12 +589,7 @@ function moreRowsIn(state: PluginState, region: string): Array<{ scope: string; 
     }
     for (j = 0; j < ids.length; j++) {
       const id = ids[j];
-      const key = scope + ":" + id;
-      if (seen[key]) continue;
-      if (isSynthetic(scope, id)) continue;
-      if (!isIntoMore(state, scope, id)) continue;
-      seen[key] = true;
-      picked.push({ scope: scope, id: id });
+      pickMoreRow(state, picked, seen, scope, id);
     }
   }
 
@@ -466,13 +603,10 @@ function moreRowsIn(state: PluginState, region: string): Array<{ scope: string; 
     if (cut <= 0) continue;
     const scope = key.slice(0, cut);
     const id = key.slice(cut + 1);
-    if (!id || seen[key]) continue;
-    // 兜底也得看归属：不然打开「分开收纳」后，两处菜单都会把对方的行补进来。
+    if (!id) continue;
+    // 兜底也得看归属：不然打开「分开收纳」后，各处菜单都会把别人的行补进来。
     if (!allowed[scope]) continue;
-    if (isSynthetic(scope, id)) continue;
-    if (!isIntoMore(state, scope, id)) continue;
-    seen[key] = true;
-    picked.push({ scope: scope, id: id });
+    pickMoreRow(state, picked, seen, scope, id);
   }
 
   // 不画线时保持上面的顺序；画线时官方整块在前、第三方整块在后，两块的内部顺序都不动。
@@ -493,7 +627,7 @@ function moreRowsIn(state: PluginState, region: string): Array<{ scope: string; 
  * @returns 记过的键序列；没排过时是空数组（各按各的默认顺序画）。
  */
 function moreOrderOf(state: PluginState, region: string): string[] {
-  return state.moreOrder[moreOrderRegion(region)] || [];
+  return state.moreOrder[region] || [];
 }
 
 /**
@@ -504,7 +638,7 @@ function moreOrderOf(state: PluginState, region: string): string[] {
  * @param keys 从上到下的行身份（见 `PluginState.moreOrder` 的说明）。
  */
 function setMoreOrder(state: PluginState, region: string, keys: string[]): void {
-  state.moreOrder[moreOrderRegion(region)] = keys.slice();
+  state.moreOrder[region] = keys.slice();
 }
 
 /**
@@ -602,8 +736,9 @@ function scopeDirty(state: PluginState, scope: string): boolean {
 /**
  * 整个状态是否已经不是出厂值——「重置所有配置」是否还有事可做。
  *
- * 只比对 `resetAll` 真正会改写的那四样（order / kinds / hidden / options）；`stashSort` 不在其中，
- * 它是收纳包的排序偏好，重置配置不会动它，因此也不该让它把按钮点亮。
+ * 只比对 `resetAll` 真正会改写的那五样（order / kinds / hidden / intoMore / moreOrder / options）；
+ * `stashSort` 不在其中，它是收纳包的排序偏好，重置配置不会动它，因此也不该让它把按钮点亮。
+ * 这份清单必须与 `settings-page` 里 `onConfirm` 实际写回的字段一一对应，否则按钮会常亮却点不动。
  *
  * 键序是确定的，可以直接 `JSON.stringify`：`normalizeState` 按 SCOPES 顺序重建 `order`、按固定字段
  * 顺序重建 `options`，而 `kinds` / `hidden` 的参照物是空对象——只要有键就必然判为有差异。
@@ -644,6 +779,21 @@ function stashEntries(state: PluginState): StashEntry[] {
 function setOption(state: PluginState, key: string, value: unknown): void {
   // 没有索引签名，两次断言才落得到 `Record` 上。
   (state.options as unknown as Record<string, unknown>)[key] = value;
+}
+
+/**
+ * 记下某个可折叠块的展开 / 折叠状态。
+ *
+ * 键用稳定的标识（`card:<scope>`、`stash:<mode>:<group>`、选项名），不用标题文案——换语言或
+ * 改文案时状态才跟着走。设置页卡片、选项分组与收纳包分组共用这一份（options.collapsed）。
+ *
+ * @param state 待修改的状态。
+ * @param key 折叠键。
+ * @param collapsed 折起来为 true。
+ */
+function setCollapsed(state: PluginState, key: string, collapsed: boolean): void {
+  if (!state.options.collapsed) state.options.collapsed = {};
+  state.options.collapsed[key] = collapsed;
 }
 
 function setHidden(state: PluginState, scope: string, id: string, hidden: boolean): void {
@@ -709,6 +859,12 @@ function moveRow(state: PluginState, scope: string, id: string, delta: number, g
   let cursor = from + step;
   while (cursor >= 0 && cursor < list.length) {
     const candidate = list[cursor];
+    // 钉在末尾的「更多」入口与已收进「更多」的行都不是可换位的邻居：投影会把「更多」
+    // 排回末尾、收进「更多」的行根本不在主列表里，换过去界面上什么也不会发生。
+    if (isMoreEntry(scope, candidate) || (moreScopeOk(scope) && isIntoMore(state, scope, candidate))) {
+      cursor += step;
+      continue;
+    }
     if (!group || groupOf(state, scope, candidate) === group) {
       target = cursor;
       break;
@@ -735,8 +891,16 @@ function resetScope(state: PluginState, scope: string): void {
   for (i = 0; i < keys.length; i++) if (keys[i].indexOf(scope + ":") === 0) delete state.hidden[keys[i]];
   const more = Object.keys(state.intoMore);
   for (i = 0; i < more.length; i++) if (more[i].indexOf(scope + ":") === 0) delete state.intoMore[more[i]];
-  // 「更多」菜单里的顺序也跟着这条 scope 一起回默认：那个 region 的菜单本来就由它参与组成。
-  delete state.moreOrder[moreRegionOf(scope)];
+  // 「更多」菜单里这条 scope 的行也一起回默认位置：只摘掉它自己的键，别整份 region 清空
+  // ——footer 与 sidebar 共用 `sidebar` 这扇菜单，整份清掉会连侧边栏「更多」的顺序一起丢。
+  // 设置页导航不进任何一处「更多」（见 MORE_SCOPES），不必动。
+  if (MORE_SCOPES.indexOf(scope) >= 0) {
+    const region = moreRegionOf(scope);
+    const order = state.moreOrder[region] || [];
+    const kept: string[] = [];
+    for (i = 0; i < order.length; i++) if (order[i].indexOf(scope + ":") !== 0) kept.push(order[i]);
+    if (kept.length !== order.length) state.moreOrder[region] = kept;
+  }
 }
 
 function restoreAllHidden(state: PluginState): void {

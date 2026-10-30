@@ -46,8 +46,9 @@ function SearchBox(props: SearchBoxProps): any {
       spellCheck: false,
       "aria-label": props.placeholder,
       onChange: function (event: any) {
-        const value = event && event.target ? event.target.value : "";
-        props.onChange(value === undefined || value === null ? "" : String(value));
+        const target = event && event.target ? event.target : null;
+        // 输入框的 value 恒为字符串；宿主没有 target 时按空串处理。
+        props.onChange(target && target.value ? String(target.value) : "");
       }
     }),
     props.value

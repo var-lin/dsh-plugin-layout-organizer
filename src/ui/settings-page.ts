@@ -7,13 +7,22 @@ interface SettingsPageProps {
 }
 
 /**
- * 设置页顶部导航的两项：位置管理（收纳包入口 + 五张排序卡片）与通用设置（开关 + 快捷键）。
+ * 设置页顶部导航的两项：位置管理（收纳包入口 + 六张排序卡片）与通用设置（开关 + 快捷键）。
  *
  * 分组是产品决定：按钮收纳包属于「整理按钮可见性」，快捷键属于「全局行为」，
  * 因此前者跟随位置卡片、后者跟随开关。
  */
 // 导航顺序：位置管理在前、通用设置在后（位置管理是本插件的主用途，默认也停在这一页）。
 const TAB_KEYS: string[] = ["layout", "general"];
+
+/**
+ * 用系统浏览器打开仓库主页 / 问题反馈页。
+ *
+ * @param url 目标地址。
+ */
+function openExternal(url: string): void {
+  window.open(url, "_blank", "noopener");
+}
 
 /**
  * 本插件在设置页里的整页视图。
@@ -52,9 +61,8 @@ function SettingsPage(props: SettingsPageProps): any {
   const dividerOpen = collapsedMap["showDivider"] !== true;
   function toggleCollapsed(key: string, open: boolean): void {
     store.update(function (next: PluginState) {
-      if (!next.options.collapsed) next.options.collapsed = {};
       // open 是「当前是否展开」：展开着点一下 → collapsed=true，收起着点一下 → collapsed=false。
-      next.options.collapsed[key] = open;
+      setCollapsed(next, key, open);
     });
   }
 
@@ -63,7 +71,7 @@ function SettingsPage(props: SettingsPageProps): any {
   for (i = 0; i < SCOPES.length; i++) {
     scopeCards.push(h(ScopeCard, { key: SCOPES[i].key, ctx: ctx, store: store, scope: SCOPES[i].key, query: query }));
   }
-  // 搜索时五张卡片可能全被过滤掉，此时给一句说明而不是空白。
+  // 搜索时六张卡片可能全被过滤掉，此时给一句说明而不是空白。
   // 命中判定走 ScopeCard 用的同一把尺子（scopeHit），两边规则一致才不会有「提示说没命中、
   // 卡片却还在」这种自相矛盾的画面。
   let anyScopeHit = false;
@@ -162,21 +170,9 @@ function SettingsPage(props: SettingsPageProps): any {
             });
           })
         : null,
-      h(Field, {
-        label: t("opt.showLauncher"),
-        hint: t("opt.showLauncher.hint"),
-        children: h(Switch, {
-          checked: state.options.showStashLauncher !== false,
-          label: t("opt.showLauncher"),
-          onChange: function (value: boolean) {
-            store.update(function (next: PluginState) {
-              setOption(next, "showStashLauncher", value);
-            });
-          }
-        })
-      }),
-      // 两处「更多」的分工。与上面那些开关各管各的：它只决定收进去的行归哪一处列出来。
-      // 宿主没有「更多」时这两处都不存在，开关也就没有对象，干脆不画（见 moreAvailable）。
+      // 三处「更多」的分工。与上面那些开关各管各的：它只决定收进去的行归哪一处列出来。
+      // 宿主没有「更多」时这三处都不存在，开关也就没有对象，干脆不画（见 moreAvailable）。
+      // 「显示悬浮框启动器」排在它后面（用户 m07351）：两项都是收纳相关的开关，分开收纳是主口径，先读它。
       moreAvailable()
         ? h(Field, {
         label: t("opt.separateMore"),
@@ -192,6 +188,19 @@ function SettingsPage(props: SettingsPageProps): any {
         })
       })
         : null,
+      h(Field, {
+        label: t("opt.showLauncher"),
+        hint: t("opt.showLauncher.hint"),
+        children: h(Switch, {
+          checked: state.options.showStashLauncher !== false,
+          label: t("opt.showLauncher"),
+          onChange: function (value: boolean) {
+            store.update(function (next: PluginState) {
+              setOption(next, "showStashLauncher", value);
+            });
+          }
+        })
+      }),
       // 全局重置：两步确认，误触不生效。状态还是出厂值时按钮灰着——按下去什么也不会变。
       h(Field, {
         label: t("action.resetAll"),
@@ -207,6 +216,7 @@ function SettingsPage(props: SettingsPageProps): any {
               next.kinds = fresh.kinds;
               next.hidden = fresh.hidden;
               next.intoMore = fresh.intoMore;
+              next.moreOrder = fresh.moreOrder;
               next.options = fresh.options;
             });
           }
@@ -231,28 +241,24 @@ function SettingsPage(props: SettingsPageProps): any {
           action: h(Btn, { variant: "primary", onClick: props.onOpenStash }, t("action.openStash"))
         })
       ];
-  for (i = 0; i < scopeCards.length; i++) {
-    if (scopeCards[i]) layoutBody.push(scopeCards[i]);
-  }
+  for (i = 0; i < scopeCards.length; i++) layoutBody.push(scopeCards[i]);
   if (searching && !anyScopeHit) layoutBody.push(h("div", { key: "no-hit", className: "lo-empty" }, t("empty.search")));
 
   const navButtons: any[] = [];
-  for (i = 0; i < TAB_KEYS.length; i++) {
-    (function (key: string) {
-      const active = tab === key;
-      navButtons.push(h("button", {
-        key: key,
-        type: "button",
-        className: "lo-tab",
-        role: "tab",
-        "aria-selected": active ? "true" : "false",
-        "data-active": active ? "1" : undefined,
-        onClick: function () {
-          setTab(key);
-        }
-      }, t("tab." + key)));
-    })(TAB_KEYS[i]);
-  }
+  TAB_KEYS.forEach(function (key: string) {
+    const active = tab === key;
+    navButtons.push(h("button", {
+      key: key,
+      type: "button",
+      className: "lo-tab",
+      role: "tab",
+      "aria-selected": active ? "true" : "false",
+      "data-active": active ? "1" : undefined,
+      onClick: function () {
+        setTab(key);
+      }
+    }, t("tab." + key)));
+  });
 
   return h("div", { className: "lo-page" },
     h("div", { className: "lo-titlerow" },
@@ -288,7 +294,7 @@ function SettingsPage(props: SettingsPageProps): any {
           iconName: "github",
           title: t("action.github.hint"),
           onClick: function () {
-            window.open(GITHUB_URL, "_blank", "noopener");
+            openExternal(GITHUB_URL);
           }
         }, t("action.github")),
         h(Btn, {
@@ -296,7 +302,7 @@ function SettingsPage(props: SettingsPageProps): any {
           iconName: "feedback",
           title: t("action.feedback.hint"),
           onClick: function () {
-            window.open(GITHUB_ISSUES_URL, "_blank", "noopener");
+            openExternal(GITHUB_ISSUES_URL);
           }
         }, t("action.feedback"))
       )

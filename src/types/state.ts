@@ -20,7 +20,6 @@ interface SlotsService {
   entriesOfSlot(slot: string): SlotEntry[];
   // 订阅返回退订函数；两处调用点都把它当函数 push 进清理列表。
   subscribe(slot: string, fn: () => void): () => void;
-  getVersion?(slot: string): number;
   register(slot: string, options: SlotEntryOptions, component: unknown): unknown;
   register(options: SlotEntryOptions, component: unknown): unknown;
   inject(slot: string, fn: () => unknown): unknown;
@@ -33,6 +32,19 @@ interface LocaleService {
 
 interface LayoutService {
   selectPanel(id: string): void;
+  // 右栏收起时用它把右栏展开（参数是宿主的轨道 / 全屏标记，本插件传 false, false）。
+  openRightbar?(track: boolean, fullscreen: boolean): void;
+}
+
+/**
+ * 右侧栏的导航服务（宿主 `ctx.get("sidebarRight")` 取到的那个控制器）。
+ *
+ * 只声明本插件用到的那一个方法。宿主自己的「开始」页卡片点下去走的就是 `openTab`，
+ * 它会顺带把收起的右栏展开（`openContent` 里先 `planSetExpanded(state, true)`）。
+ */
+interface SidebarRightService {
+  // kind 取自卡片上的 data-sidebar-right-guide-entry；未注册的 kind 或无挂载会话时宿主会抛错。
+  openTab(kind: string, options?: { replaceTab?: boolean }): void;
 }
 
 interface ShortcutsService {
@@ -79,7 +91,9 @@ function shortcutIds(shortcuts: ShortcutsService): string[] | null {
 interface CtxLike {
   slots: SlotsService;
   effect(fn: () => unknown, label?: string): unknown;
-  get(name: string): unknown;
+  // `strict`：cordis 的 `ctx.get(name, strict)` 默认只在「提供者 fiber 处于 ACTIVE」时才返回服务
+  // （旧版没有这层检查）。宿主插件刚启动 / 正在重载时该检查会返回 undefined，传 false 可绕过。
+  get(name: string, strict?: boolean): unknown;
 }
 
 // 持久化状态。
@@ -92,14 +106,12 @@ interface StateOptions {
   // 每个 scope 各自的分隔线开关；缺省（未设置）视为开，与 `showDivider` 取 AND。
   dividers: Record<string, boolean>;
   showStashLauncher: boolean;
-  // 分开收纳：打开时侧边栏的行只进侧边栏「更多」、对话区的行只进对话「更多」；关闭时两处共用一份清单。
+  // 分开收纳：打开时侧边栏的行只进侧边栏「更多」、对话区的行只进对话「更多」、右侧边栏的行只进右侧栏「更多工具」；关闭时三处共用一份清单。
   separateMore: boolean;
   // 「更多」菜单里画不画官方 / 第三方分隔线；与 `showDivider` 各管各的。
   // 每个「有下属行」的折叠键（如 allowDragOfficial / showDivider）-> 是否折叠；缺省视为展开。
   collapsed: Record<string, boolean>;
   launcherSide: string;
-  // 拖动中的悬浮按钮跟手用的横坐标；松手后按它落在窗口哪半边决定贴左还是贴右，再写回 null 恢复按边贴靠的定位。
-  launcherX: number | null;
   launcherY: number | null;
 }
 
@@ -129,26 +141,15 @@ interface StoreHandle {
   reset(): void;
 }
 
-// 与渲染它的元素配成一对的台账记录。
+// 与渲染它的元素配成一对的台账记录；认领不到时 el 为 null（不要再用断言把 null 说成元素）。
 interface Pair {
   id: string;
-  el: HTMLElement;
-  extra: HTMLElement[];
-  label: string;
+  el: HTMLElement | null;
 }
 
-// `applyScope` 回传的结果：这个 scope 到底有没有东西可管。`mounted: false` 属于正常情况而不是错误——侧边栏收起时它就是未挂载状态。
-interface ScopeResult {
-  mounted: boolean;
-  official: number;
-  third: number;
-}
-
+// 按下但还没超过拖动阈值的候选行；起点坐标用来算位移。
 interface DragPending {
   row: HTMLElement;
-  scope: string;
-  id: string;
-  group: string;
   x: number;
   y: number;
 }
