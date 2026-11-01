@@ -1,0 +1,71 @@
+name: Feature request
+description: Request a new feature or an improvement of existing behavior
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This plugin only changes the **display position** of buttons — the plugin registry is untouched, nothing is uninstalled or toggled. Describe what you want the UI to look like; an implementation plan is not needed.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Read this first
+      options:
+        - label: I am on the latest release and the feature really is missing
+          required: true
+        - label: I have searched the existing issues and found no duplicate
+          required: true
+
+  - type: textarea
+    id: feature
+    attributes:
+      label: What should be added
+      description: One sentence describing the feature
+      placeholder: e.g. A single global order shared by every position...
+    validations:
+      required: true
+
+  - type: textarea
+    id: pain
+    attributes:
+      label: Current situation / use case
+      description: How you do it today, and where it breaks down
+      placeholder: e.g. With mixed sorting the divider disappears, so I have to switch it off to see the groups...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Desired behavior
+      description: Describe what you expect to see
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Affected positions (multiple allowed)
+      multiple: true
+      options:
+        - Left sidebar · top
+        - Left sidebar · footer
+        - Conversation · top tabs
+        - Conversation · composer dock
+        - Right sidebar · Start page
+        - Settings · left nav
+        - '"More" menu'
+        - Settings page / "Hidden buttons" panel / floating launcher
+        - Not position specific
+    validations:
+      required: true
+
+  - type: textarea
+    id: media
+    attributes:
+      label: Additional context (optional)
+      description: Screenshots, reference implementations, related issues
+    validations:
+      required: false

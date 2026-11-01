@@ -1,0 +1,98 @@
+name: Bug report
+description: A feature does not work, behaves unexpectedly, or something else is broken
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please go through the checklist below first. This plugin only changes the **display position** of buttons — it never touches the plugin registry, so "the plugin itself looks dead" belongs in that plugin's repository.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Read this first
+      options:
+        - label: This is a problem of "Plugin Layout Organizer", not of DSH itself or another plugin
+          required: true
+        - label: I am on the latest release (the version is shown at the right of the settings page title)
+          required: true
+        - label: I have searched the existing issues and found no duplicate
+          required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      description: Settings → Plugin Layout Organizer, the version at the right of the title
+      placeholder: e.g. v1.3.0
+    validations:
+      required: true
+
+  - type: input
+    id: dsh-version
+    attributes:
+      label: DSH version
+      description: Host version; "Move into More" / "Separate stashes" also require host 0.2.1-rc.3 or newer
+      placeholder: e.g. 0.2.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Where it happens (multiple allowed)
+      multiple: true
+      options:
+        - Left sidebar · top
+        - Left sidebar · footer
+        - Conversation · top tabs
+        - Conversation · composer dock
+        - Right sidebar · Start page
+        - Settings · left nav
+        - '"More" menu'
+        - Settings page / "Hidden buttons" panel / floating launcher
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Drag X onto Y and release
+        3. See ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots / recordings / console errors
+      description: Drag screenshots into this box; paste the full stack for console errors
+    validations:
+      required: false
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Exported config (optional)
+      description: '"Export config" in the settings title row produces a JSON file — attaching it helps reproduce'
+    validations:
+      required: false

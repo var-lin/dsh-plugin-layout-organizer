@@ -171,6 +171,17 @@ A client bundle may only `require` platform seed words or packages already regis
 
 ---
 
+## Feedback
+
+Found a problem or want a feature? Open an issue from a template on [Issues](https://github.com/var-lin/dsh-plugin-layout-organizer/issues):
+
+- **Bug report**: a feature does not work or behaves unexpectedly. It is labelled `bug` and titled `[BUG] `. Please fill in the plugin version, the DSH version and where it happens; screenshots, console errors and the JSON exported from Settings can all be pasted into the form.
+- **Feature request**: something to add or improve. It is labelled `enhancement` and titled `[Feature] `. Describe the current situation and what you expect — an implementation plan is not needed.
+
+A blank issue is available for anything the templates do not cover. Note that "Into more" / "Out of more" and "Separate stashes" also require host `0.2.1-rc.3` or newer — on older hosts those entries are simply not rendered, which is not a bug.
+
+---
+
 ## License
 
 MIT

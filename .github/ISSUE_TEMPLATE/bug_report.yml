@@ -1,0 +1,98 @@
+name: 问题反馈
+description: 功能不生效 / 行为异常 / 其他 BUG，请选择此项进行反馈
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先过一遍下面的检查项。本插件只改按钮的**显示位置**，不改插件注册表——「插件本身像没启动」这类问题请先到对应插件仓库反馈。
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: 重要阅读
+      options:
+        - label: 我已确认这是「插件布局整理」的问题，不是 DSH 本身或别的插件的问题
+          required: true
+        - label: 我已升级到最新的 release 版本（版本号见设置页大标题右侧）
+          required: true
+        - label: 我已在已有的 issues 中查询过，没有重复问题
+          required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: 插件版本
+      description: 设置 → 插件布局整理，大标题右侧显示的版本号
+      placeholder: 例如：v1.3.0
+    validations:
+      required: true
+
+  - type: input
+    id: dsh-version
+    attributes:
+      label: DSH 版本
+      description: 宿主版本；「进更多 / 出更多」「分开收纳」这类功能还要求宿主 0.2.1-rc.3 起
+      placeholder: 例如：0.2.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 出问题的位置（可多选）
+      multiple: true
+      options:
+        - 左侧边栏·顶部
+        - 左侧边栏·底部
+        - 对话页·顶部标签
+        - 对话页·输入框下方
+        - 右侧边栏·开始页
+        - 设置窗口·左侧导航
+        - 「更多」菜单
+        - 设置页 /「已收起的按钮」面板 / 悬浮启动器
+        - 不确定
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开 ……
+        2. 把 X 拖到 Y 上松手
+        3. 看到 ……
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+    validations:
+      required: true
+
+  - type: textarea
+    id: media
+    attributes:
+      label: 截图 / 录屏 / 控制台报错
+      description: 截图可直接拖进输入框；控制台报错请贴完整堆栈
+    validations:
+      required: false
+
+  - type: textarea
+    id: config
+    attributes:
+      label: 配置导出（可选）
+      description: 设置页标题行的「导出配置」会生成一个 JSON，拖进来有助于复现
+    validations:
+      required: false
