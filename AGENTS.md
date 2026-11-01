@@ -21,7 +21,7 @@ DSH 客户端插件「插件布局整理」（`dsh-plugin-layout-organizer`）�
 - `tools/` —— 本地工具：`ts-check.mjs`（用 VS Code 自带的 TypeScript 跑真实类型检查）、`asar-read.mjs`（读 app.asar 内部文件）、`release-notes.mjs`（从 `CHANGELOG.md` 抽指定版本段落，供 CI 建 Release 当说明）
 - `.github/workflows/publish.yml` —— 发版自动化：推送 `v*` tag 时构建 → 校验构建产物与源码一致 → 测试 → 发布 npm（Trusted Publishing / OIDC）→ 建同名 GitHub Release（说明取自 CHANGELOG）。npm 上已有该版本则跳过发布，Release 已存在则改写说明，可安全重跑
 - `.github/workflows/ci.yml` —— PR 校验：开 PR 或推送 `master` 时跑一遍发版用的同一套闸门（构建 → 语法检查 → 校验已提交的 `lib/client.js` 与源码一致 → 五个测试），再加一次类型检查 `node tools/ts-check.mjs`（与本地同一条命令；机器上没有 VS Code 时脚本内部用 `npx -y --package typescript@6.0.3 tsc -p tsconfig.json` 按需下载同一版本，不写进 package.json、不产生锁文件）；只读权限，不发布也不建 Release，同分支的新提交顶掉上一次未跑完的校验
-- `.github/ISSUE_TEMPLATE/` —— Issues 模板（GitHub Issue Forms）：`bug_report.yml`（问题反馈，标签 `bug`，标题前缀 `[BUG] `）与 `feature_request.yml`（功能请求，标签 `enhancement`，标题前缀 `[Feature] `）各带一份 `_en.yml` 英文版，外加 `config.yml`（保留空白 issue，附 README / CHANGELOG 联系链接）。表单字段与插件真实功能对齐——出问题位置的下拉项就是六处位置加「更多」菜单与设置页；改字段时中英文四份一起改，别只改一份；`README.md` / `README.en.md` 末尾各有一节「反馈 / Feedback」指向这两个模板，字段或标题前缀变了要跟着改
+- `.github/ISSUE_TEMPLATE/` —— Issues 模板（GitHub Issue Forms）：`bug_report.yml`（问题反馈，标签 `bug`，标题前缀 `[BUG] `）与 `feature_request.yml`（功能请求，标签 `enhancement`，标题前缀 `[功能请求] `、英文版 `[Feature] `）各带一份 `_en.yml` 英文版；不放 `config.yml`，空白 issue 保持可用。功能请求表单只收「涉及的位置（必选，可多选）→ 功能描述 → 补充说明」，不设现状 / 期望这类分栏。表单字段与插件真实功能对齐——出问题位置的下拉项就是六处位置加「更多」菜单与设置页；改字段时中英文四份一起改，别只改一份；`README.md` / `README.en.md` 末尾各有一节「反馈 / Feedback」指向这两个模板，字段或标题前缀变了要跟着改
 - `README.md` / `README.en.md` —— 中文（默认）/ 英文说明，须与代码保持一致；`CHANGELOG.md` 记录版本变更
 
 ## 发版

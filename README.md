@@ -173,7 +173,7 @@ git tag vX.Y.Z && git push origin vX.Y.Z
 遇到问题或想加功能，去 [Issues](https://github.com/var-lin/dsh-plugin-layout-organizer/issues) 按模板新开一条：
 
 - **问题反馈**：功能不生效、行为异常。会自动打上 `bug` 标签、标题前缀 `[BUG] `。请填清插件版本、DSH 版本与出问题的位置；截图、控制台报错、设置页导出的配置 JSON 都可以直接贴进表单。
-- **功能请求**：希望新增或改进的功能。会自动打上 `enhancement` 标签、标题前缀 `[Feature] `；写清现状与期望效果即可，不必给实现方案。
+- **功能请求**：希望新增或改进的功能。会自动打上 `enhancement` 标签、标题前缀 `[功能请求] `；选好涉及的位置，写清想要什么、界面该变成什么样即可，不必给实现方案。
 
 模板没覆盖的情况也可以开空白 issue。
 

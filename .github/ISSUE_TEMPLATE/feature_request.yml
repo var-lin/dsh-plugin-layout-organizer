@@ -1,6 +1,6 @@
 name: 功能请求
 description: 希望新增功能或改进现有行为，请选择此项进行提交
-title: "[Feature] "
+title: "[功能请求] "
 labels: ["enhancement"]
 body:
   - type: markdown
@@ -18,32 +18,6 @@ body:
         - label: 我已在已有的 issues 中查询过，没有重复请求
           required: true
 
-  - type: textarea
-    id: feature
-    attributes:
-      label: 功能描述
-      description: 一句话说清你希望加什么
-      placeholder: 例如：希望所有位置的按钮能共享一个全局顺序……
-    validations:
-      required: true
-
-  - type: textarea
-    id: pain
-    attributes:
-      label: 现状 / 使用场景
-      description: 现在是怎么做的，卡在哪一步
-      placeholder: 例如：混排之后分隔线整条消失，我得手动关掉混排才能看到分组……
-    validations:
-      required: true
-
-  - type: textarea
-    id: expected
-    attributes:
-      label: 期望的效果
-      description: 描述你希望看到的行为
-    validations:
-      required: true
-
   - type: dropdown
     id: scope
     attributes:
@@ -59,6 +33,15 @@ body:
         - 「更多」菜单
         - 设置页 /「已收起的按钮」面板 / 悬浮启动器
         - 不涉及具体位置
+    validations:
+      required: true
+
+  - type: textarea
+    id: feature
+    attributes:
+      label: 功能描述
+      description: 说清你希望加什么功能、界面应该变成什么样
+      placeholder: 例如：希望所有位置的按钮能共享一个全局顺序……
     validations:
       required: true
 
