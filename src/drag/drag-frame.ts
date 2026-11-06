@@ -365,3 +365,128 @@ function outsidePluginPage(x: number, y: number, margin: number): boolean {
   }
   return seen;
 }
+
+/**
+ * 三个控制器共用的手势骨架：按下 → 过阈值 → 拖动 → 松手，外加「吞掉跟手的那一下 click」。
+ *
+ * 三家原先各写一遍这段管线（pending 判定、阈值、click 抑制、挂载与卸载），
+ * 只有「认哪一行、开拖时做什么、松手提交什么、怎么收尾」不同；那些留成钩子。
+ * 监听仍由 `bindDragEvents` 挂在 document / window 的 capture 阶段。
+ *
+ * @param spec 认行与四个阶段钩子。
+ * @returns 挂载与卸载。
+ */
+interface PointerDragSpec<P> {
+  /** 按下时认出这次拖什么；认不出返回 null（点在行内按钮上、不在受管行上）。 */
+  pick(target: EventTarget | null, event: PointerEvent): P | null;
+  /** 越过阈值、正式开拖：压暗原行、改光标、置位让投影让位，都由钩子自己负责。 */
+  begin(picked: P, event: PointerEvent): void;
+  /** 拖动中每一次指针移动；要不要节流由钩子决定。 */
+  move(picked: P, event: PointerEvent): void;
+  /** 松手：钩子自己提交（换位 / 收进更多 / 收起 / 恢复）。 */
+  drop(picked: P, event: PointerEvent): void;
+  /** 收尾：擦掉标记、清落点、释放投影。松手、取消、卸载都会走，必须幂等。 */
+  end(picked: P | null): void;
+  /** 取消时的额外处理；不给就只调 `end`。 */
+  cancel?(picked: P | null): void;
+  /** 滚动或尺寸变化时重算落点；不给就不监听滚动。 */
+  scroll?(): void;
+  /** 要不要一起监听 resize（宿主行跟着窗口变宽，另两处是固定尺寸弹层）。 */
+  resize?: boolean;
+}
+
+/**
+ * 造一个指针拖拽控制器。
+ *
+ * @param spec 认行与四个阶段钩子。
+ * @returns 挂载与卸载。
+ */
+function createPointerDrag<P>(spec: PointerDragSpec<P>): { attach: () => void; detach: () => void } {
+  let pending: { picked: P; x: number; y: number } | null = null;
+  let drag: P | null = null;
+  let active = false;
+  let suppressClickUntil = 0;
+  let detachEvents: (() => void) | null = null;
+
+  function onDown(event: PointerEvent): void {
+    if (event.button !== 0) return;
+    const picked = spec.pick(event.target, event);
+    if (picked === null) return;
+    pending = { picked: picked, x: event.clientX, y: event.clientY };
+  }
+
+  function onMove(event: PointerEvent): void {
+    if (!active) {
+      if (!pending) return;
+      if (belowDragThreshold(event.clientX, event.clientY, pending.x, pending.y)) return;
+      const picked = pending.picked;
+      pending = null;
+      drag = picked;
+      active = true;
+      spec.begin(picked, event);
+      // 越过阈值那一帧就拦下默认行为，否则拖行会顺手选中相邻的文字。
+      event.preventDefault();
+      return;
+    }
+    if (drag === null) return;
+    event.preventDefault();
+    spec.move(drag, event);
+  }
+
+  function onUp(event: PointerEvent): void {
+    if (!active || drag === null) {
+      pending = null;
+      spec.end(null);
+      return;
+    }
+    const picked = drag;
+    // 尾随的 click 属于这一拖：三条落点分支都要吞，不能等提交完再武装。
+    suppressClickUntil = Date.now() + LO_CLICK_SUPPRESS_MS;
+    active = false;
+    drag = null;
+    spec.drop(picked, event);
+    spec.end(picked);
+  }
+
+  function onCancel(): void {
+    const picked = drag;
+    pending = null;
+    active = false;
+    drag = null;
+    if (spec.cancel) spec.cancel(picked);
+    else spec.end(picked);
+  }
+
+  function onClickCapture(event: MouseEvent): void {
+    // 吞掉跟手的那一下 click 后就归零，别把时间窗里的正常点击也吞掉。
+    if (swallowClick(event, suppressClickUntil)) suppressClickUntil = 0;
+  }
+
+  function onScroll(): void {
+    if (active && spec.scroll) spec.scroll();
+  }
+
+  return {
+    attach: function (): void {
+      if (detachEvents) return;
+      detachEvents = bindDragEvents({
+        down: onDown,
+        move: onMove,
+        up: onUp,
+        cancel: onCancel,
+        click: onClickCapture,
+        scroll: spec.scroll ? onScroll : function (): void {},
+        resize: spec.resize === true
+      });
+    },
+    detach: function (): void {
+      if (!detachEvents) return;
+      detachEvents();
+      detachEvents = null;
+      spec.end(drag);
+      drag = null;
+      pending = null;
+      active = false;
+    }
+  };
+}

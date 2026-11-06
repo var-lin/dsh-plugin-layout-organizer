@@ -15,6 +15,9 @@ function createOrganizer(ctx: CtxLike, store: StoreHandle, report: (message: str
     if (disposed) return;
     // 拖动中不重绘。
     if (dragActive()) return;
+    // 右栏注册表一轮只读一次（见 rightCardList）：宿主的插件可能在两轮之间换了，
+    // 这里先作废，这一轮读到的就是最新的卡片表。
+    resetRightCards();
     for (let i = 0; i < SCOPES.length; i++) {
       const scope = SCOPES[i].key;
       try {
@@ -25,6 +28,20 @@ function createOrganizer(ctx: CtxLike, store: StoreHandle, report: (message: str
     }
     // 投影已经落地：此后读 DOM 的地方（设置页的挂载判定、拖动快照）都能看到结果。
     notifyRevision();
+    // 顺手清掉「已收起的按钮」里那些按钮已经不在的记录（见 `pruneStash`）。放在投影之后：
+    // 这一轮刚标记到的行就是「还活着」的证据，先有证据再判谁不见了。
+    try {
+      pruneStash(ctx, store);
+    } catch (err) {
+      report("prune", err);
+    }
+    // 顺手把这一轮看到的行记进「已知」，新出现的行标成「新」（见 `noteNewRows`）。
+    // 与清理失效记录同一处调用：两者用的是同一份「这一行还在不在」的证据。
+    try {
+      noteNewRows(ctx, store);
+    } catch (err) {
+      report("fresh", err);
+    }
     muted = true;
     // 卸载后这一拍不该再跑：`stop()` 会清掉它，回调本身也再查一次 `disposed`。
     // 先撤掉上一轮还没跑的回调：否则旧回调会把 `settle` 置 0，新句柄随之丢失，`stop()` 就清不到它。

@@ -1,9 +1,50 @@
 let loMenuEl: HTMLElement | null = null;
 let loMenuBound = false;
+// 宿主自己的右键菜单（`ctx.contextMenus`）。两套菜单互不知情：我们在 window 捕获阶段
+// 截走 contextmenu，宿主的「点了别处」判断收不到这次手势，它已经打开的那扇就不会关。
+// 所以开我们这扇之前先让它关——由 main.ts 把宿主服务的 close 接进来。
+let closeHostMenu: (() => void) | null = null;
+
+function bindHostMenuCloser(fn: (() => void) | null): void {
+  closeHostMenu = fn;
+}
+
+function closeHostMenuIfAny(): void {
+  if (!closeHostMenu) return;
+  try {
+    closeHostMenu();
+  } catch (err) {
+    // 宿主服务可能已经随插件卸载；关不掉也不该拦住我们自己的菜单。
+  }
+}
 
 // 宿主弹层菜单的一条/整扇：菜单项带 `role="menuitem"`，容器带 `role="menu"`。
 // 用 role 而不是类名——类名是 CSS Modules 的哈希（`_menu_6nhg2_547`），换一版构建就变。
 const MENU_POPUP_SELECTOR = "[role='menu'],[role='menuitem'],[role='menuitemcheckbox'],[role='menuitemradio']";
+
+// 弹层与视口边缘的最小间距：贴着窗口边太紧，圆角和描边都会被裁掉。
+const POP_MARGIN = 8;
+
+/**
+ * 把一扇弹层放进视口：先量真实尺寸，再按锚点夹一次。
+ *
+ * 右键菜单是手搭的、分组菜单是 React portal，两处原本各猜一个宽高（144 / 60 与写死的
+ * `innerWidth - 240 - 8`、`innerHeight - 330`）——猜小一点没事，猜大了菜单底部就被窗口裁掉，
+ * 靠底的那几项点不到。量一次再夹，两边用同一把尺子。
+ *
+ * @param menu 弹层元素；还没挂到 DOM 上时直接返回。
+ * @param x 期望的左上角横坐标。
+ * @param y 期望的左上角纵坐标。
+ */
+function placePop(menu: HTMLElement | null, x: number, y: number): void {
+  if (!menu) return;
+  const width = menu.offsetWidth || 144;
+  const height = menu.offsetHeight || 60;
+  const left = Math.min(x, window.innerWidth - width - POP_MARGIN);
+  const top = Math.min(y, window.innerHeight - height - POP_MARGIN);
+  menu.style.left = Math.max(POP_MARGIN, Math.round(left)) + "px";
+  menu.style.top = Math.max(POP_MARGIN, Math.round(top)) + "px";
+}
 
 function closeMenu(): void {
   if (loMenuEl && loMenuEl.parentNode) loMenuEl.parentNode.removeChild(loMenuEl);
@@ -27,6 +68,9 @@ function guardPopEvents(menu: HTMLElement): void {
 }
 
 function openMenu(event: MouseEvent, actions: MenuAction[]): void {
+  // 先关宿主的菜单，再关我们自己的：两扇不能同时出现。放在最前面，免得下面任何一步
+  // 提前 return 时宿主那扇还留在屏幕上。
+  closeHostMenuIfAny();
   closeMenu();
   // 背景在 aria-hidden 的 material 上；data-menu-material 是暗色主题换更亮描边的钩子
   const menu = document.createElement("div");
@@ -75,12 +119,7 @@ function openMenu(event: MouseEvent, actions: MenuAction[]): void {
   }
   menu.appendChild(viewport);
   document.body.appendChild(menu);
-  const width = menu.offsetWidth || 144;
-  const height = menu.offsetHeight || 60;
-  const left = Math.min(event.clientX, window.innerWidth - width - 8);
-  const top = Math.min(event.clientY, window.innerHeight - height - 8);
-  menu.style.left = Math.max(8, Math.round(left)) + "px";
-  menu.style.top = Math.max(8, Math.round(top)) + "px";
+  placePop(menu, event.clientX, event.clientY);
   loMenuEl = menu;
 }
 
@@ -98,9 +137,10 @@ function insideMenu(target: EventTarget | null): boolean {
 
 function onMenuPointerDown(event: PointerEvent): void {
   if (!loMenuEl) return;
-  // 菜单内部的 pointerdown 放过（由它自己的 click 关掉）；左键点外部才关——滚动、失焦都不关（AI 回答时页面自己滚动，菜单不能跟着消失）。
+  // 菜单内部不关（由它自己的 click 关）。外部左键、右键都要关：右键关掉是为了让紧接着
+  // 打开的宿主菜单或我们自己的新菜单不跟旧菜单叠在一起；中键、侧键不动。
   if (insideMenu(event.target)) return;
-  if (event.button !== 0) return;
+  if (event.button !== 0 && event.button !== 2) return;
   closeMenu();
 }
 
@@ -161,7 +201,7 @@ function menuActionsFor(store: StoreHandle, scope: string, id: string, group: st
     // 钉住的「更多」入口固定收尾，收进「更多」的行不在主列表里：拿它们当邻居换位，
     // 界面上不会发生任何变化（`moveRow` 只换顺序，投影又把「更多」排回末尾）。
     if (isMoreEntry(scope, ids[i])) continue;
-    if (moreScopeOk(scope) && isIntoMore(state, scope, ids[i])) continue;
+    if (isIntoMoreRow(state, scope, ids[i])) continue;
     if ((group === "all" || groupOf(state, scope, ids[i]) === group) && !isHidden(state, scope, ids[i])) groupIds.push(ids[i]);
   }
   const at = groupIds.indexOf(id);
@@ -266,7 +306,7 @@ function kindToggleAction(store: StoreHandle, scope: string, id: string, disable
     disabled: disabled,
     run: function (): void {
       store.update(function (next: PluginState): void {
-        next.kinds[scope + ":" + id] = official ? "third" : "official";
+        next.kinds[rowKey(scope, id)] = official ? "third" : "official";
       });
     }
   };

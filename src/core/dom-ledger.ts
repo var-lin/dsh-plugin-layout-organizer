@@ -4,6 +4,8 @@ interface LedgerEntry {
   id: string;
   label: string;
   hasLabel: boolean;
+  // 宿主登记的注册方包名（通常就是插件包名）；只用来在界面名字读不到时兜底显示。
+  registrant?: string;
   // 台账登记的排序号；配对与投影都不读它，只有 `readEntries` 自己按它排序时才有值。
   order?: number;
 }
@@ -11,6 +13,9 @@ interface LedgerEntry {
 function readEntries(ctx: CtxLike, scope: string): LedgerEntry[] {
   const slot = SLOT_OF_SCOPE[scope];
   const out: LedgerEntry[] = [];
+  // 右侧边栏那处没有槽位（`SLOT_OF_SCOPE["right"]` 是空串），拿空串去问宿主只会抛错、
+  // 被下面的 catch 吞掉，表现为「右栏永远没有台账」。直接返回空，不去打扰宿主。
+  if (!slot) return out;
   let entries: SlotEntry[] | null = null;
   try {
     entries = scope === "sidebar" || scope === "footer" ? ctx.slots.entriesOfSlot(slot) : ctx.slots.entries(slot);
@@ -33,7 +38,14 @@ function readEntries(ctx: CtxLike, scope: string): LedgerEntry[] {
       }
     }
     const hasLabel = typeof label === "string" && label.length > 0;
-    out.push({ id: String(id), label: hasLabel ? (label as string) : String(id), hasLabel: hasLabel, order: options.order || 0 });
+    const registrant = options.registrant;
+    out.push({
+      id: String(id),
+      label: hasLabel ? (label as string) : String(id),
+      hasLabel: hasLabel,
+      registrant: typeof registrant === "string" ? registrant : "",
+      order: options.order || 0
+    });
   }
   // 标签带和输入框按钮带不按 order 排，由官方渲染器排布。
   if (scope !== "tabs" && scope !== "composer") {
@@ -182,7 +194,7 @@ function setLiveRows(scope: string, rows: LiveRow[] | null): void {
  * @returns 那个元素；这一轮没标记到、或缓存的元素已经被宿主换掉时返回 null。
  */
 function liveElement(scope: string, id: string): HTMLElement | null {
-  const key = scope + ":" + id;
+  const key = rowKey(scope, id);
   const cached = __liveEls[key];
   // `isConnected` 取不到的宿主环境（测试桩）当作还连在树上，别把缓存白白丢掉。
   if (cached && cached.isConnected !== false) return cached;

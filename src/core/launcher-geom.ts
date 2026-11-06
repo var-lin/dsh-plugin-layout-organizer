@@ -15,7 +15,14 @@
  */
 function rowAtPoint(selector: string, x: number, y: number): HTMLElement | null {
   const stack = document.elementsFromPoint(x, y);
-  if (stack.length > 0 && stack[0].closest('.lo-stash, .lo-pop, .lo-launcher, [role="dialog"], [role="menu"], [data-shortcut-modal]')) return null;
+  // 0.2.2 窄屏把侧边栏本身做成 `role="dialog"` + `data-shortcut-modal="sidebar"`：
+  // 它的行同样受管，不能连同整个抽屉一起当遮罩拒掉；收起面板、菜单、普通弹窗仍要拦。
+  if (stack.length > 0) {
+    const top = stack[0] as HTMLElement;
+    const drawer = top.closest('[data-shortcut-modal="sidebar"]');
+    const blocked = top.closest('.lo-stash, .lo-pop, .lo-launcher, [role="menu"], [role="dialog"]:not([data-shortcut-modal="sidebar"]), [data-shortcut-modal]:not([data-shortcut-modal="sidebar"])');
+    if (blocked && !(drawer && top.closest(selector))) return null;
+  }
   const nodes = document.querySelectorAll(selector);
   let hit: HTMLElement | null = null;
   let best = Infinity;

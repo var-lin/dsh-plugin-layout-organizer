@@ -17,6 +17,18 @@ interface ScopeCardProps {
 }
 
 /**
+ * 这一行被整理过了：把它的「新」标记收走。
+ *
+ * 用户 m02715：只要动过这一行的布局（改判、上下移、收起、进更多、右键菜单），它就不再是「新」。
+ *
+ * @param scope 位置键。
+ * @param id 行 id。
+ */
+function markRowSeen(scope: string, id: string): void {
+  clearFreshRow(scope, id);
+}
+
+/**
  * 组装一张位置卡片要列的行：先按协调后的顺序排，再剔除屏幕上不存在的记录。
  *
  * 台账里渲染成空的记录（供应商未登录时的统计读数）不该出现，否则用户会对着一行看不见的
@@ -228,12 +240,15 @@ function ScopeCard(props: ScopeCardProps): any {
     const index = mixed ? entries.indexOf(entry) : groupIndex[group]++;
     const total = (mixed ? entries.length : groupTotal[group]) - ((mixed || group === pinnedGroup) && pinnedShown ? 1 : 0);
     rows.push(h(RowItem, {
-      key: scope + ":" + id,
+      key: rowKey(scope, id),
       entry: entry,
       scope: scope,
       kind: kind,
       group: listGroup,
       hidden: hidden,
+      // 装插件之后才冒出来的行标红名字；离开「位置管理」页一次收走（见 settings-page 里那个
+      // effect），同一次安装只会看到一次（用户 m02493）。演示开关打开时另随机挑几行（用户 m02715）。
+      fresh: isFreshRow(scope, id),
       // 三颗「更多」入口钉在列表末尾：不能拖、不能上下移、也不能改判官方 / 第三方（用户 m04058）。
       draggable: !isMoreEntry(scope, id),
       kindLocked: isMoreEntry(scope, id),
@@ -246,24 +261,28 @@ function ScopeCard(props: ScopeCardProps): any {
       },
       onToggleKind: function () {
         store.update(function (next: PluginState) {
-          next.kinds[scope + ":" + id] = kind === "official" ? "third" : "official";
+          next.kinds[rowKey(scope, id)] = kind === "official" ? "third" : "official";
         });
+        markRowSeen(scope, id);
       },
       onUp: function () {
         store.update(function (next: PluginState) {
           // 混合排序下整条 scope 就是一个组（"all"），moveRow 只认 official / third。
           moveRow(next, scope, id, -1, listGroup === "all" ? undefined : listGroup);
         });
+        markRowSeen(scope, id);
       },
       onDown: function () {
         store.update(function (next: PluginState) {
           moveRow(next, scope, id, 1, listGroup === "all" ? undefined : listGroup);
         });
+        markRowSeen(scope, id);
       },
       onToggleHidden: function () {
         store.update(function (next: PluginState) {
           setHidden(next, scope, id, !hidden);
         });
+        markRowSeen(scope, id);
       },
       // 「更多」只对能收进去的槽位有意义（侧边栏 / 底部 / 标签 / 停靠行 / 右侧边栏）；设置行没有容器可去。
       // 三颗「更多」入口按钮自己不给这个键（见 isMoreEntry）：收进去就再也点不开那扇菜单。
@@ -273,8 +292,10 @@ function ScopeCard(props: ScopeCardProps): any {
         store.update(function (next: PluginState) {
           setIntoMore(next, scope, id, !into);
         });
+        markRowSeen(scope, id);
       } : undefined,
       onMenu: function (event: MouseEvent) {
+        markRowSeen(scope, id);
         attachMenuAt(event, store, scope, id, listGroup);
       }
     }));
@@ -292,17 +313,23 @@ function ScopeCard(props: ScopeCardProps): any {
         setCollapsed(next, cardKey, cardOpen);
       });
     },
-    action: h(ConfirmBtn, {
-      label: t("action.reset"),
-      confirmLabel: t("action.confirmResetGroup"),
-      // 这张卡片没有保存顺序、也没有收纳行时，恢复无事可做，按钮灰着而不是可点却毫无反应。
-      disabled: !scopeDirty(state, scope),
-      onConfirm: function () {
-        store.update(function (next: PluginState) {
-          resetScope(next, scope);
-        });
-      }
-    })
+    action: h(React.Fragment, null,
+      // 标题行左到右：整组显示操作 → 官方在前 → 本组恢复默认。
+      // 前两个是「调整」，最后一个是「撤销」；撤销放最右，避免误触。
+      h(ScopeActionsMenu, { scope: scope, state: state, store: store, rows: entries }),
+      h(ScopeSortButton, { scope: scope, state: state, store: store, rows: entries }),
+      h(ConfirmBtn, {
+        label: t("action.reset"),
+        confirmLabel: t("action.confirmResetGroup"),
+        // 这张卡片没有保存顺序、也没有收纳行时，恢复无事可做，按钮灰着而不是可点却毫无反应。
+        disabled: !scopeDirty(state, scope),
+        onConfirm: function () {
+          store.update(function (next: PluginState) {
+            resetScope(next, scope);
+          });
+        }
+      })
+    )
   },
     // 这一组此刻不在屏幕上时给一句解释；右侧边栏的卡片按注册表列出来了，就不必再让人先去翻页面。
     mounted || rows.length > 0 ? null : h("div", { className: "lo-note" }, t("scope.missing")),

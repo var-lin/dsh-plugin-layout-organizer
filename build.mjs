@@ -18,6 +18,9 @@ const outFile = join(root, "lib", "client.js");
 
 // 依赖顺序。每一项都是 `src/` 下的路径，用 POSIX 分隔符。
 const BUILD_ORDER = [
+// 拼接顺序 = 声明顺序：函数声明会提升，所以 store.ts 排在 dom-rows.ts 之前也能调用它的
+// liveOrder / liveElement（运行时才求值）。这类反向调用只允许出现在函数声明里——别把被调的
+// 读取器改成 const 箭头函数，否则 TDZ 会在启动那一刻就崩。
   // 只有形状，构建时会被擦除。类型文件都在 src/types/ 下
   "types/state.ts",
   // 常量放最前：样式表会插值用到里面的 z-index 值
@@ -26,16 +29,31 @@ const BUILD_ORDER = [
   "shared/icons.ts",
   "shared/locale.ts",
   "core/store.ts",
+  // store 的其余部分：重渲染总线与撤销栈、分类判定、「更多」、写操作、会话内的新行与预设
+  "core/store-runtime.ts",
+  "core/store-kinds.ts",
+  "core/store-more.ts",
+  "core/store-edit.ts",
+  "core/store-data.ts",
   // 悬浮启动器的几何与命中：只依赖 constants.ts，排在 dom-rows.ts 之前
   "core/launcher-geom.ts",
   // 台账配对与投影记忆：要排在使用它的 dom-rows.ts 与 dom-project.ts 之前
   "core/dom-ledger.ts",
   // 插件图标兜底：要 notifyRevision（store.ts），也要排在使用它的 dom-rows.ts 之前
   "core/dom-rows.ts",
+  "core/dom-composer.ts",
+  "core/dom-right.ts",
+  "core/dom-metrics.ts",
+  "core/dom-label.ts",
   "core/dom-line.ts",
   "core/dom-menu.ts",
   "core/dom-project.ts",
+  "core/dom-right-nav.ts",
+  "core/dom-settings-nav.ts",
   "core/dom-navigate.ts",
+  "core/stash-prune.ts",
+  // 「新按钮」提醒与失效清理用的是同一份证据，紧跟在它后面
+  "core/fresh-rows.ts",
   "core/organizer.ts",
   // 三个拖拽控制器共用的手势管线，排在它们之前
   "drag/drag-frame.ts",
@@ -44,13 +62,22 @@ const BUILD_ORDER = [
   "drag/drag-stash.ts",
   "ui/styles.ts",
   "ui/kit.ts",
+  "ui/kit-controls.ts",
+  "ui/kit-rows.ts",
+  "ui/scope-actions.ts",
   "ui/search.ts",
   "ui/config-actions.ts",
   "ui/scope-card.ts",
   "ui/shortcut-card.ts",
+  "ui/presets-card.ts",
   "ui/settings-page.ts",
   "ui/stash.ts",
+  "ui/stash-panel.ts",
+  "ui/stash-flag.ts",
+  "ui/stash-view.ts",
   "ui/more-menu.ts",
+  "ui/more-menu-gesture.ts",
+  "ui/more-menu-rows.ts",
   "main.ts"
 ];
 

@@ -137,15 +137,12 @@ function insertionIndex(rects: DragRowRect[], pointer: number, dragged: string):
 }
 
 function createDragController(store: StoreHandle): { attach: () => void; detach: () => void } {
-  let pending: DragPending | null = null;
-  let active = false;
   let scope = "";
   let id = "";
   let group = "";
   let axis = "y";
   let sequence: HTMLElement[] = [];
   let draggedEl: HTMLElement | null = null;
-  let suppressClickUntil = 0;
   // 指针在当前轴上的最近一次坐标。滚动时指针没动、矩形全变了，预览要拿它重算一次。
   let lastPointer = 0;
   // 另一个轴的坐标，以及两个落点的命中状态：拖到「更多」入口上松手是收进「更多」（用户 m04058），
@@ -156,7 +153,7 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
   const stashSlot = createDropSlot(DROP_MARK);
   // 一帧最多重算一次（规则在 drag-frame.ts）。
   const throttle = createFrameThrottle(function (pointer: number): void {
-    if (active && draggedEl) applyAt(pointer);
+    if (draggedEl) applyAt(pointer);
   });
 
   /**
@@ -253,8 +250,7 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
     return rectsOf(mine, axis);
   }
 
-  function begin(event: PointerEvent, row: HTMLElement): void {
-    active = true;
+  function startDrag(event: PointerEvent, row: HTMLElement): void {
     setDragActive(true);
     scope = row.getAttribute(MARKS.scope) || "";
     id = row.getAttribute(MARKS.id) || "";
@@ -338,7 +334,6 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
     // 落在悬浮框上：这一拖是收起，优先级高于「更多」（用户 m04359）。
     const dropStash = stashSlot.hit() !== null;
     // 尾随的 click 属于拖动要吞掉；截止时刻在 finish 武装。
-    suppressClickUntil = Date.now() + LO_CLICK_SUPPRESS_MS;
     cleanup();
     if (commitStashOrMore(store, finalScope, draggedId, dropIntoMore, dropStash)) return;
     if (!hasRealId) return;
@@ -382,102 +377,68 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
     moreSlot.clear();
     stashSlot.clear();
     document.body.style.cursor = "";
-    pending = null;
-    active = false;
     setDragActive(false);
     draggedEl = null;
     sequence = [];
   }
 
-  function onDown(event: PointerEvent): void {
-    if (event.button !== 0) return;
-    if (event.target instanceof Element && event.target.closest(".lo-pop, .lo-stash, .lo-launcher")) return;
-    const row = rowFrom(event.target, event.clientX, event.clientY);
-    if (!row) return;
-    pending = {
-      row: row,
-      x: event.clientX,
-      y: event.clientY
-    };
+  /**
+   * 按下时认行：closest → elementsFromPoint → 几何硬扫的三级兜底在 `rowFrom` 里。
+   */
+  function pickRow(target: EventTarget | null, event: PointerEvent): HTMLElement | null {
+    return rowFrom(target, event.clientX, event.clientY);
   }
 
-  function onMove(event: PointerEvent): void {
-    if (!active) {
-      if (!pending) return;
-      const dx = event.clientX - pending.x;
-      const dy = event.clientY - pending.y;
-      if (dx * dx + dy * dy < LO_DRAG_THRESHOLD * LO_DRAG_THRESHOLD) return;
-      const row = pending.row;
-      pending = null;
-      begin(event, row);
-      return;
-    }
-    event.preventDefault();
+  function begin(picked: HTMLElement, event: PointerEvent): void {
+    startDrag(event, picked);
+  }
+
+  function move(picked: HTMLElement, event: PointerEvent): void {
     update(event);
   }
 
-  function onUp(event: PointerEvent): void {
-    if (active) {
-      // 松手点可能和最后一次 pointermove 不同（指针一甩就抬）：按松手坐标补算一次，
-      // 否则落点按旧位置判，拖到「更多」/ 悬浮框上会被漏掉。
-      lastX = event.clientX;
-      lastY = event.clientY;
-      lastPointer = axis === "x" ? event.clientX : event.clientY;
-      // 先丢掉积压帧再补算：留着它会在 finish 里用旧坐标把预览覆盖回去。
-      throttle.drop();
-      applyAt(lastPointer);
-      finish();
-    } else {
-      cleanup();
-    }
+  /**
+   * 松手：先按松手坐标补算一次落点，再交给 `finish` 提交（换位 / 收进更多 / 收起）。
+   */
+  function drop(picked: HTMLElement, event: PointerEvent): void {
+    // 松手点可能和最后一次 pointermove 不同（指针一甩就抬）：按松手坐标补算一次，
+    // 否则落点按旧位置判，拖到「更多」/ 悬浮框上会被漏掉。
+    lastX = event.clientX;
+    lastY = event.clientY;
+    lastPointer = axis === "x" ? event.clientX : event.clientY;
+    // 先丢掉积压帧再补算：留着它会在 finish 里用旧坐标把预览覆盖回去。
+    throttle.drop();
+    applyAt(lastPointer);
+    finish();
   }
 
-  function onCancel(): void {
-    if (active) {
-      // 投影下一轮会用 store 里的值重写每一个 order，所以丢弃预览只需要请求一轮即可。
-      cleanup();
-      store.update(function () {});
-    } else {
-      cleanup();
-    }
+  /**
+   * 取消：投影下一轮会用 store 里的值重写每一个 order，所以丢弃预览只需要请求一轮即可。
+   */
+  function cancel(picked: HTMLElement | null): void {
+    cleanup();
+    if (picked) store.update(function (): void {});
   }
 
   /**
    * 滚动事件没有新的指针坐标，拿上一次的坐标重算即可（`onScroll` 用）。
    */
   function refreshRects(): void {
-    if (active && draggedEl) applyAt(lastPointer);
+    if (draggedEl) applyAt(lastPointer);
   }
 
   function onScroll(): void {
-    if (active) refreshRects();
+    if (draggedEl) refreshRects();
   }
 
-  function onClickCapture(event: MouseEvent): void {
-    // 吞掉跟手的那一下 click 后就归零：否则在这个时间窗里用户自己点别的行也会被吞掉。
-    if (swallowClick(event, suppressClickUntil)) suppressClickUntil = 0;
-  }
-
-  let detachEvents: (() => void) | null = null;
-
-  return {
-    attach: function (): void {
-      if (detachEvents) return;
-      detachEvents = bindDragEvents({
-        down: onDown,
-        move: onMove,
-        up: onUp,
-        cancel: onCancel,
-        click: onClickCapture,
-        scroll: onScroll,
-        resize: true
-      });
-    },
-    detach: function (): void {
-      if (!detachEvents) return;
-      detachEvents();
-      detachEvents = null;
-      cleanup();
-    }
-  };
+  return createPointerDrag<HTMLElement>({
+    pick: pickRow,
+    begin: begin,
+    move: move,
+    drop: drop,
+    end: cleanup,
+    cancel: cancel,
+    scroll: onScroll,
+    resize: true
+  });
 }

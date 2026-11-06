@@ -115,7 +115,14 @@ const CSS_TEXT: string[] = [
   ".lo-titlerow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}",
   ".lo-titlerow .lo-title{flex:0 0 auto;min-width:0}",
   ".lo-titlegap{flex:1 1 auto;min-width:0}",
-  ".lo-titleacts{flex:0 0 auto;display:flex;gap:8px}",
+  // 动作区只剩一排：撤销 / 还原与四处跳转 / 搬运同排，窄了就横向滚动（不换行、不压扁按钮）。
+  ".lo-titleacts{flex:0 0 auto;display:flex;min-width:0;max-width:100%}",
+  ".lo-acts-row{display:flex;gap:8px;flex-wrap:nowrap;min-width:0;max-width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}",
+  ".lo-acts-row::-webkit-scrollbar{height:6px}",
+  ".lo-acts-row::-webkit-scrollbar-thumb{border-radius:3px;background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.16))}",
+  // 按钮的回执贴在版本号右边（用户 m02647）：一行字，长了截断，不把标题行挤变形。
+  ".lo-title-note{flex:0 1 auto;min-width:0;max-width:min(34ch,42vw);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;line-height:1.4;color:var(--dsw-alias-state-success-primary,#2f9e44)}",
+  ".lo-title-note[data-tone='error']{color:var(--dsw-alias-state-error-primary,#ec1313)}",
   // 标题行按钮比列表里的大一号：这是本页最主要的动作区，按下时不该比正文还轻。
   ".lo-titleacts .lo-btn{min-height:32px;padding:0 14px;gap:8px;font-size:12.5px;border-radius:9px}",
   // 版本号是只读标签而不是按钮：不加边框与背景，只用次级文字色，避免和右侧四个按钮抢注意力。
@@ -145,9 +152,9 @@ const CSS_TEXT: string[] = [
   ".lo-ico[data-ico='import']>svg{transform:scale(.88)}",
   ".lo-ico[data-ico='github']>svg{transform:scale(1.05)}",
   ".lo-ico[data-ico='feedback']>svg{transform:scale(1)}",
-  ".lo-notice{margin:-6px 0;font-size:12px;line-height:1.5;color:var(--dsw-alias-state-success-primary,#2f9e44)}",
-  ".lo-notice[data-tone='error']{color:var(--dsw-alias-state-error-primary,#ec1313)}",
-  ".lo-lead{margin:-8px 0 -8px;font-size:12.5px;line-height:1.6;color:var(--dsw-alias-label-secondary)}",
+  // 撤销 / 还原的素材占空比约 88%，与导出 / 导入同档再略收一点，一排按钮的图标才一样高。
+  ".lo-ico[data-ico='undo']>svg{transform:scale(1)}",
+  ".lo-ico[data-ico='redo']>svg{transform:scale(1)}",
   ".lo-card{border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1);overflow:hidden}",
   ".lo-card-head{padding:11px 14px;border-bottom:1px solid var(--dsw-alias-border-l1);font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary)}",
   // 标题行右侧动作区：卡片级动作（恢复本组默认顺序）放这里，比卡片底部那条更早被看见。
@@ -162,7 +169,16 @@ const CSS_TEXT: string[] = [
   // 小三角紧跟类名（与收纳包分组标题同一位置）：展开朝下、收起转 -90°。
   ".lo-card-caret{flex:0 0 auto;display:inline-block;width:10px;font-size:10px;line-height:1;color:var(--dsw-alias-label-secondary);transition:transform .12s ease}",
   ".lo-card[data-open='0'] .lo-card-caret{transform:rotate(-90deg)}",
-  ".lo-card-action{flex:0 0 auto;display:flex;align-items:center;gap:8px}",
+  ".lo-card-action{flex:0 0 auto;display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;row-gap:6px}",
+  // 标题行右侧的批量下拉：触发器与「恢复本组」并排，菜单 portal 到 body（卡片 overflow:hidden）。
+  ".lo-bulk{display:inline-flex;align-items:center}",
+  ".lo-bulk-trigger{gap:5px}",
+  ".lo-bulk-caret{font-size:9px;line-height:1;opacity:.65}",
+  ".lo-bulk-pop{width:max-content;min-width:0;max-width:min(320px,calc(100vw - 16px));max-height:calc(100vh - 16px);overflow:auto}",
+  ".lo-bulk-list{gap:2px;padding:2px}",
+  ".lo-bulk-group{display:flex;flex-direction:column;gap:1px;padding:2px 0}",
+  ".lo-bulk-group + .lo-bulk-group{border-top:1px solid var(--dsw-alias-border-l1,#0000000a);margin-top:2px;padding-top:4px}",
+  ".lo-bulk-group-title{padding:3px 8px;color:var(--dsw-alias-label-secondary,#6b7280);font-size:11px;line-height:16px}",
   // 卡片标题上的恢复按钮比正文小一号：它是标题级次级动作，不跟标题抢视觉重量。
   // 字重同样压回 400——卡片标题是 600，按钮继承会变粗。
   ".lo-card-action .lo-btn{min-height:24px;padding:0 9px;font-size:11.5px;font-weight:400;border-radius:7px}",
@@ -232,6 +248,22 @@ const CSS_TEXT: string[] = [
   ".lo-row-open:disabled:hover .lo-row-name{color:var(--dsw-alias-label-primary)}",
   ".lo-row-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--dsw-alias-label-primary)}",
   ".lo-row-id{flex:0 0 auto;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-secondary)}",
+  // 新按钮的名字标红：只改字色，不加角标、不占列宽（用户 m02614）。
+  ".lo-row-name[data-fresh='1']{color:var(--dsw-alias-state-error-primary,#e03131);font-weight:600}",
+  // 顶部的「有新按钮」提示条：一行字加一颗按钮，语气与标题行那条成功回执一致。
+  ".lo-fresh{display:flex;align-items:center;gap:10px;margin:0 0 10px;padding:8px 12px;border:1px solid var(--dsw-alias-brand-primary,#4d6bfe);border-radius:10px;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-primary)}",
+  ".lo-fresh-text{flex:1 1 auto;min-width:0}",
+
+  // 布局预设：名称输入框 + 保存 / 覆盖按钮一行，下面是预设行（名字 + 应用 + 删除）。
+  ".lo-preset-save{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 14px}",
+  ".lo-input{flex:1 1 160px;min-width:0;height:30px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-base);font:inherit;font-size:12px;color:var(--dsw-alias-label-primary)}",
+  ".lo-input:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#4d6bfe);outline-offset:-1px}",
+  ".lo-preset-note{padding:6px 14px 0;font-size:12px;line-height:1.6;color:var(--dsw-alias-label-secondary)}",
+  ".lo-preset-list{display:flex;flex-direction:column;gap:4px;padding:8px 14px 12px}",
+  ".lo-preset-row{display:flex;align-items:center;gap:8px;min-height:30px}",
+  ".lo-preset-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;color:var(--dsw-alias-label-primary)}",
+  // 内置的「默认」那一行：它是当前布局本身（不进存档、不可应用也不可删除），用次级色读作基准而不是一条待办。
+  ".lo-preset-row-base .lo-preset-name{color:var(--dsw-alias-label-secondary);font-weight:600}",
   // 行首图标固定 16px 见方：画 svg 还是画名字首字，后面文字的左边缘都在同一个位置。
   ".lo-row-ico{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;overflow:hidden;border-radius:4px;color:var(--dsw-alias-label-secondary)}",
   ".lo-row-ico>svg{width:16px;height:16px}",

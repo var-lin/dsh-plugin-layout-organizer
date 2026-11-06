@@ -1,7 +1,7 @@
 const PLUGIN_ID = "dsh-plugin-layout-organizer";
 // 设置页大标题右侧展示的版本号。必须与 package.json 的 version 逐字一致——
 // test/accept.mjs 会断言两处相等，改版本时忘了同步这里会当场失败，而不是悄悄显示旧号。
-const PLUGIN_VERSION = "1.3.0";
+const PLUGIN_VERSION = "1.3.1";
 const NS = "layout-organizer";
 const STORAGE_KEY = "dsh.layout-organizer.state.v5";
 const STATE_VERSION = 5;
@@ -103,8 +103,9 @@ const OFFICIAL_IDS: Record<string, string[]> = {
   composer: ["stats", "context-meter", "activity", "usage"],
   // 右侧栏「开始」页的卡片按 tab kind 认身份：files / browser / terminal 来自 DSH 自带的三个包
   // （dsh-client-ui-sidebar-files / -browser / -terminal 各自 sidebarRightTabs.register 的 guide 卡片），
-  // 「更多工具」是宿主自画的那颗菜单按钮，其余 kind 都是第三方插件注册的。
-  right: ["files", "browser", "terminal", "more"],
+  // forge-panel 是 0.2.2 起官方「代码审查和变更」卡片；「更多工具」是宿主自画的那颗菜单按钮，
+  // 其余 kind 都是第三方插件注册的。guide 不带 providerId 的宿主靠这份静态名单兜底。
+  right: ["files", "browser", "terminal", "forge-panel", "more"],
   settings: ["account", "general", "models", "plugins", "agent-presets"]
 };
 
@@ -324,3 +325,4 @@ const Z_MASK = 2147483300;
 const Z_STASH = 2147483400;
 const Z_MENU = 2147483500;
 const Z_DIVIDER = 90;
+

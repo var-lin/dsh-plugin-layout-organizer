@@ -122,6 +122,20 @@ function apply(ctx: CtxLike): void {
   const listDrag = createListDragController(store);
   const stashDrag = createStashDragController(store);
 
+  // 宿主 0.2.2 起有了统一的右键菜单服务。它有 close()，但没有办法在我们开菜单时
+  // 主动通知它；两扇同时开就是用户看到的那种叠在一起。把它的 close 交给行菜单，
+  // 开我们这扇前先关掉它。老宿主没有这个服务，取不到就按没有处理。
+  try {
+    const hostMenus = ctx.get("contextMenus") as { close?: () => void } | null;
+    if (hostMenus && typeof hostMenus.close === "function") {
+      bindHostMenuCloser(function (): void {
+        hostMenus.close?.();
+      });
+    }
+  } catch (err) {
+    // 老宿主没有 contextMenus 服务，静默降级：只关我们自己的菜单。
+  }
+
   ctx.effect(function () {
     // 行菜单是窗口级捕获监听器，所以它一次覆盖所有 scope——包括从未打过标记的行。
     installRowMenu(store);
@@ -135,6 +149,7 @@ function apply(ctx: CtxLike): void {
       drag.detach();
       organizer.stop();
       uninstallRowMenu();
+      bindHostMenuCloser(null);
       removeSurfaces();
       setActiveStore(null);
       setActiveContext(null);

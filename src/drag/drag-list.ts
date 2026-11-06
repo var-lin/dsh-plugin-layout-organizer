@@ -1,7 +1,4 @@
 function createListDragController(store: StoreHandle): { attach: () => void; detach: () => void } {
-  let pending: { row: HTMLElement; container: HTMLElement; x: number; y: number } | null = null;
-  let active = false;
-  let suppressClickUntil = 0;
   let rects: DragRowRect[] = [];
   let sequence: HTMLElement[] = [];
   let draggedEl: HTMLElement | null = null;
@@ -26,7 +23,7 @@ function createListDragController(store: StoreHandle): { attach: () => void; det
   let outOfPage = false;
   // 一帧最多重算一次（规则在 drag-frame.ts）。
   const throttle = createFrameThrottle(function (pointer: number): void {
-    if (active && draggedEl) applyAt(pointer);
+    if (draggedEl) applyAt(pointer);
   });
 
   function rowFrom(target: EventTarget | null): HTMLElement | null {
@@ -93,7 +90,7 @@ function createListDragController(store: StoreHandle): { attach: () => void; det
     clearFrame = requestAnimationFrame(function () {
       clearFrame = null;
       // 手势又开始了：新预览已经写在新节点上，别拿旧节点把它擦掉。
-      if (active) return;
+      if (draggedEl) return;
       for (let i = 0; i < nodes.length; i++) nodes[i].style.order = "";
     });
   }
@@ -110,11 +107,10 @@ function createListDragController(store: StoreHandle): { attach: () => void; det
     touched = [];
   }
 
-  function begin(row: HTMLElement, container: HTMLElement): void {
+  function startDrag(row: HTMLElement, container: HTMLElement): void {
     // 上一轮被放弃的预览节点先把 order 擦掉：它们已经不在这一轮的预览序列里，
     // 留着会把这一轮的新顺序压在下面。
     clearPreviewNow();
-    active = true;
     draggedEl = row;
     containerEl = container;
     id = row.getAttribute("data-lo-list-id") || "";
@@ -205,46 +201,42 @@ function createListDragController(store: StoreHandle): { attach: () => void; det
     document.documentElement.style.cursor = "";
     // 在最后一轮投影运行之前释放，好让已提交的顺序被画出来。
     setDragActive(false);
-    pending = null;
-    active = false;
     draggedEl = null;
     containerEl = null;
     rects = [];
     sequence = [];
   }
 
-  function onDown(event: PointerEvent): void {
-    if (event.button !== 0) return;
+  /**
+   * 设置页里能拖的一行。
+   *
+   * @property row 那一行的元素。
+   * @property container 行所在的卡片容器（带 `data-lo-list-scope`）。
+   */
+  function pickRow(target: EventTarget | null): { row: HTMLElement; container: HTMLElement } | null {
     // 行内的动作按钮（改判、上移、下移、收纳）必须保持可点击；名称区是行本身的一部分，
-    // 仍可以按住它拖动，点击与拖拽靠阈值区分（拖动一旦开始，onClickCapture 会吞掉这次 click）。
-    if (event.target instanceof Element && event.target.closest(".lo-btn")) return;
-    const row = rowFrom(event.target);
-    if (!row) return;
+    // 仍可以按住它拖动，点击与拖拽靠阈值区分（拖动一旦开始，骨架会吞掉这次 click）。
+    if (target instanceof Element && target.closest(".lo-btn")) return null;
+    const row = rowFrom(target);
+    if (!row) return null;
     const container = row.parentElement;
-    if (!container || !container.getAttribute("data-lo-list-scope")) return;
-    pending = {
-      row: row,
-      container: container,
-      x: event.clientX,
-      y: event.clientY
-    };
+    if (!container || !container.getAttribute("data-lo-list-scope")) return null;
+    return { row: row, container: container };
   }
 
-  function onMove(event: PointerEvent): void {
-    if (!pending && !active) return;
-    if (!active) {
-      if (belowDragThreshold(event.clientX, event.clientY, pending.x, pending.y)) return;
-      const row = pending.row;
-      const container = pending.container;
-      pending = null;
-      begin(row, container);
-    }
-    event.preventDefault();
+  function begin(picked: { row: HTMLElement; container: HTMLElement }): void {
+    startDrag(picked.row, picked.container);
+  }
+
+  function move(picked: { row: HTMLElement; container: HTMLElement }, event: PointerEvent): void {
     update(event);
   }
 
-  function onUp(event: PointerEvent): void {
-    if (!active || !draggedEl || !containerEl) {
+  /**
+   * 松手提交：三条落点（恢复 / 收起 / 收进更多）优先，其余按组内下标换位。
+   */
+  function drop(picked: { row: HTMLElement; container: HTMLElement }, event: PointerEvent): void {
+    if (!draggedEl || !containerEl) {
       cleanup();
       return;
     }
@@ -267,12 +259,9 @@ function createListDragController(store: StoreHandle): { attach: () => void; det
     const dropIntoMore = moreSlot.hit() !== null;
     // 落在悬浮框上：这一拖是收起，优先级高于「更多」（用户 m04359）。
     const dropStash = stashSlot.hit() !== null;
-    // 已经拖出本插件的设置页：这一拖是恢复（用户 m07052）。flushUpdate 刚按松手坐标补算过。
+    // 已经拖出本插件的设置页：这一拖是恢复（用户 m07052）。
     const dropRestore = outOfPage && !dropStash;
     const draggedId = id;
-    // 尾随的 click 属于拖动要吞掉：三条提交路径都要武装，不能等排序分支才设，
-    // 否则拖到「更多」/ 悬浮框上松手会顺手把这一行点开（面板里的主按钮是导航）。
-    suppressClickUntil = Date.now() + LO_CLICK_SUPPRESS_MS;
     cleanup();
     // 预览写的行内 order 在三条落点分支上也要擦：React 复用这些节点，不清就会停在预览顺序上。
     scheduleClearPreview();
@@ -324,43 +313,25 @@ function createListDragController(store: StoreHandle): { attach: () => void; det
   /**
    * 取消：预览未提交，行上的脚手架立刻擦掉。
    */
-  function onCancel(): void {
+  function cancel(): void {
     const nodes = touched;
     touched = [];
     for (let i = 0; i < nodes.length; i++) nodes[i].style.order = "";
     cleanup();
   }
 
-  function onClickCapture(event: MouseEvent): void {
-    if (swallowClick(event, suppressClickUntil)) suppressClickUntil = 0;
-  }
-
   function onScroll(): void {
-    if (active) refreshRects();
+    if (draggedEl) refreshRects();
   }
 
-  let detachEvents: (() => void) | null = null;
-
-  return {
-    attach: function (): void {
-      if (detachEvents) return;
-      detachEvents = bindDragEvents({
-        down: onDown,
-        move: onMove,
-        up: onUp,
-        cancel: onCancel,
-        click: onClickCapture,
-        scroll: onScroll,
-        resize: false
-      });
-    },
-    detach: function (): void {
-      if (!detachEvents) return;
-      detachEvents();
-      detachEvents = null;
-      cleanup();
-      // 卸载时预览写的 order 也要擦，否则宿主节点会停在预览顺序上。
-      scheduleClearPreview();
-    }
-  };
+  return createPointerDrag<{ row: HTMLElement; container: HTMLElement }>({
+    pick: pickRow,
+    begin: begin,
+    move: move,
+    drop: drop,
+    end: cleanup,
+    cancel: cancel,
+    scroll: onScroll,
+    resize: false
+  });
 }

@@ -130,8 +130,38 @@ function claimedPairs(pairs: Pair[], el: HTMLElement): boolean {
   return false;
 }
 
+/**
+ * 没有台账文案时的名字：界面显示名 → 注册方包名 → 空（交给统一取名退回 id）。
+ *
+ * 宿主把名字画在按钮上、却没写进槽位注册（remote 的「Remote」，用户 m00004）。界面上的名字
+ * 才是用户看到的那个，优先用它；读不到或读回来就是 id 时，退到注册方包名。
+ *
+ * 数据行不能读界面文字：输入框下方的会话统计 / 用量 / 上下文百分比渲染的是数字，把
+ * 「12.3K tokens」当名字收进「已收起的按钮」就没人看得懂了。这类行由 `ROW_HOOKS` 声明，
+ * 名字交给 `ROW_LABELS` / 钩子文案（如「会话统计」，用户 m01654）。
+ *
+ * @param scope 槽位 key。
+ * @param entry 台账记录，可能没有。
+ * @param id 行 id。
+ * @param el 行元素。
+ * @returns 可用的兜底名字；都没有时为空字符串。
+ */
+function rowFallbackLabel(scope: string, entry: LedgerEntry | null | undefined, id: string, el: HTMLElement): string {
+  if (rowHookOf(scope, id)) return "";
+  return firstLabel(id, [
+    function () {
+      return rowDomLabel(el);
+    },
+    function () {
+      return entry && entry.registrant ? entry.registrant : "";
+    },
+  ]);
+}
+
 function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): void {
   const state = store.get();
+  // 右侧栏的官方判定来自宿主注册表的注册方包名：投影前先刷一遍，新增的官方卡不必再改名单。
+  if (scope === "right") rightGuideEntries(ctx);
   const entries = readEntries(ctx, scope);
   const units = collectRowUnits(scope);
   // 行整个不见了，顺手收掉按旧几何量定位的分割线。
@@ -255,7 +285,11 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): void {
     // 钉住的行不拿拖动标记：拖它换不了位置，只会把落点写进台账（见 isMoreEntry）。
     const pinned = isMoreEntry(scope, id);
     const entry = byId[id];
-    live.push({ id: id, label: rowDisplayLabel(scope, id, entry && entry.hasLabel ? entry.label : unitLabels[id] || ""), el: el });
+    let fallback = entry && entry.hasLabel ? entry.label : unitLabels[id] || "";
+    // 台账插件的注册常常只给 id、不给文案；界面上的名字比 id 更像名字（用户 m00004）。
+    // 数据行（停靠行的统计 / 用量）在这里被 `rowFallbackLabel` 挡掉，名字仍交给稳定文案。
+    if (!(entry && entry.hasLabel) && !fallback) fallback = rowFallbackLabel(scope, entry, id, el);
+    live.push({ id: id, label: rowDisplayLabel(scope, id, fallback), el: el });
     setMark(el, MARKS.row, "1");
     setMark(el, MARKS.scope, scope);
     setMark(el, MARKS.id, id);
@@ -276,7 +310,7 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): void {
     }
     // 收进官方「更多」菜单的行同样从主列表让位：视觉上就是「不见了」，但入口挪到了「更多」里，
     // 因此仍留在 live 记录中（设置页列得到、收纳包不会误收）。
-    if (moreScopeOk(scope) && isIntoMore(state, scope, id)) {
+    if (isIntoMoreRow(state, scope, id)) {
       setMark(el, MARKS.hidden, "1");
       setOrder(el, "");
       continue;
@@ -315,7 +349,7 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): void {
       if (isHidden(state, scope, sequence[i])) continue;
       // 收进「更多」的行离场后 order 被清空（liveOrder 读回是 0），留在序列里会排在官方块中间，
       // 后面每一颗官方按钮都被判成「穿插」，整条线就被收掉了（用户报：收走一颗第三方，线就没了）。
-      if (moreScopeOk(scope) && isIntoMore(state, scope, sequence[i])) continue;
+      if (isIntoMoreRow(state, scope, sequence[i])) continue;
       // 钉住的三点「更多」固定收尾，它的位置不代表官方块与第三方块的交界。
       if (isMoreEntry(scope, sequence[i])) continue;
       if (kindOf(state, scope, sequence[i]) === "third") seenThird = true;

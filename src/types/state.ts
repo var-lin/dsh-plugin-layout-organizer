@@ -106,6 +106,10 @@ interface StateOptions {
   // 每个 scope 各自的分隔线开关；缺省（未设置）视为开，与 `showDivider` 取 AND。
   dividers: Record<string, boolean>;
   showStashLauncher: boolean;
+  // 自动清除失效的收起记录：插件卸载、或那颗按钮真的不在界面上之后，「已收起的按钮」里那条
+  // 记录自动删掉（见 pruneStash）。默认开。
+  pruneStash: boolean;
+  // 位置管理页显不显示「布局预设」那张卡片；默认开。关掉只是不显示，已存的预设不删。
   // 分开收纳：打开时侧边栏的行只进侧边栏「更多」、对话区的行只进对话「更多」、右侧边栏的行只进右侧栏「更多工具」；关闭时三处共用一份清单。
   separateMore: boolean;
   // 「更多」菜单里画不画官方 / 第三方分隔线；与 `showDivider` 各管各的。
@@ -113,6 +117,27 @@ interface StateOptions {
   collapsed: Record<string, boolean>;
   launcherSide: string;
   launcherY: number | null;
+}
+
+/**
+ * 一份命名好的布局：只记「按钮怎么摆」，不含开关与快捷键。
+ *
+ * 与 `PluginState` 分开是因为预设是**快照**：应用预设时只把这五样写回当前状态，
+ * 顺手调过的开关、悬浮按钮位置、快捷键都不该被一套旧预设带走。
+ */
+interface PresetData {
+  // scope -> 有序 id 列表。
+  order: Record<string, string[]>;
+  // "scope:id" -> "official" | "third"。
+  kinds: Record<string, string>;
+  // "scope:id" -> true（收进「已收起的按钮」）。
+  hidden: Record<string, boolean>;
+  // "scope:id" -> true（收进「更多」）。
+  intoMore: Record<string, boolean>;
+  // region -> 菜单里各行的先后。
+  moreOrder: Record<string, string[]>;
+  // 保存时刻，用于列表里按时间排。
+  savedAt: number;
 }
 
 interface PluginState {
@@ -130,13 +155,24 @@ interface PluginState {
   // 只记「这扇菜单里怎么排」，与各 scope 的 `order` 无关：一扇菜单能跨槽位列出好几处的行。
   moreOrder: Record<string, string[]>;
   stashSort: string;
+  // "scope:id" -> 第一次见到这一行的时间戳。只用来标「装插件之后新冒出来、还没整理过」的行：
+  // 第一次跑本插件时整份当作基线，不弹「新」（见 `noteKnownRows`）。
+  known: Record<string, number>;
+  // 预设名 -> 一份布局快照。
+  presets: Record<string, PresetData>;
+  // 当前停在哪套预设上：预设名，空串表示内置的「默认」（也就是在手调布局）。
+  activePreset: string;
+  // 「默认」那套的快照：停在默认上时每次改动同步一份，切到别的预设后冻结，
+  // 于是切回默认能回到手调的那副样子（见商店 update 里的同步）。
+  defaultPreset: PresetData | null;
 }
 
 interface StoreHandle {
   get(): PluginState;
   subscribe(listener: (state: PluginState) => void): () => void;
   // 修改函数可以原地改（常见情况），也可以返回一个替换用的 state。
-  update(mutator: (state: PluginState) => PluginState | void): void;
+  // `opts.history === false` 的写不进「撤销上一步」（投影每轮顺手记的已知行就属于这类）。
+  update(mutator: (state: PluginState) => PluginState | void, opts?: { history?: boolean }): void;
   replace(next: PluginState): void;
   reset(): void;
 }
