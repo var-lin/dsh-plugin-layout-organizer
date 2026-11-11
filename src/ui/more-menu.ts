@@ -56,6 +56,8 @@ let loMoreMenuStore: StoreHandle | null = null;
 let loMoreMenuDismiss: (() => void) | null = null;
 let loMoreGesturesBound = false;
 let loMoreGestureRefs = 0;
+// 手势监听整组挂/摘的句柄（见 dom-menu.ts 的 bindWindowCapture）。
+let loMoreGestureOff: (() => void) | null = null;
 
 // 正在按下的那一行、以及有没有真的拖起来。指针可能抬在行外，所以记在模块级。
 const loMoreDrag: {

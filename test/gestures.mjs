@@ -263,6 +263,85 @@ async function caseMoreReorderAndCancel() {
   for (const row of rows) assert(row.style.order === "", "preview order not cleared after cancel");
 }
 
+// ---------------------------------------------------------------- 右键与修饰键手势
+
+async function casePlainRightClickOpensMenu() {
+  const { env, store } = await boot(seedState({ order: { sidebar: ["alpha", "beta", "gamma", "more"] } }));
+  const rows = mountSidebar(env, ["alpha", "beta", "gamma"]);
+
+  env.dispatch("contextmenu", rows.beta, { clientX: 10, clientY: 60, button: 2 });
+
+  assert(env.document.querySelector(".lo-pop") !== null, "plain right click did not open the row menu");
+  assert(store.get().intoMore["sidebar:beta"] !== true, "plain right click must not tuck into More");
+  assert(store.get().hidden["sidebar:beta"] !== true, "plain right click must not tuck the row away");
+}
+
+async function caseCtrlRightTucksIntoMore() {
+  const { env, store } = await boot(seedState({ order: { sidebar: ["alpha", "beta", "gamma", "more"] } }));
+  const rows = mountSidebar(env, ["alpha", "beta", "gamma"]);
+
+  env.dispatch("contextmenu", rows.beta, { clientX: 10, clientY: 60, button: 2, ctrlKey: true });
+
+  assert(store.get().intoMore["sidebar:beta"] === true, "ctrl+right did not tuck into More");
+  assert(env.document.querySelector(".lo-pop") === null, "gesture must not open the row menu");
+}
+
+async function caseCtrlLeftTogglesEveryRow() {
+  const { env, store } = await boot(seedState({ order: { sidebar: ["alpha", "beta", "gamma", "more"] } }));
+  const rows = mountSidebar(env, ["alpha", "beta", "gamma"]);
+
+  for (const id of ["alpha", "beta"]) {
+    env.dispatch("pointerdown", rows[id], { clientX: 10, clientY: 20, button: 0, ctrlKey: true });
+    env.dispatch("pointerup", rows[id], { clientX: 10, clientY: 20, button: 0, ctrlKey: true });
+  }
+  assert(store.get().hidden["sidebar:alpha"] === true, "first row not tucked");
+  assert(store.get().hidden["sidebar:beta"] === true, "second row not tucked");
+
+  env.dispatch("pointerdown", rows.alpha, { clientX: 10, clientY: 20, button: 0, ctrlKey: true });
+  env.dispatch("pointerup", rows.alpha, { clientX: 10, clientY: 20, button: 0, ctrlKey: true });
+  assert(store.get().hidden["sidebar:alpha"] !== true, "second gesture did not restore the row");
+}
+
+// 「更多」菜单开着时侧栏那条线不动：宿主会把菜单节点挂进列表、行几何跟着变，
+// 按这一轮重算就会把线画到「更多」身上（用户 m03252：不打开菜单时位置是对的）。
+async function caseDividerFrozenWhileMoreMenuOpen() {
+  const { env } = await boot(seedState({ options: { showDivider: true, mixGroups: true } }));
+  env.slotEntries["sidebar.panellist"] = [
+    { options: { id: "plugins", label: "插件", order: 0 } },
+    { options: { id: "schedules", label: "自动化任务", order: 10 } },
+    { options: { id: "gamma", label: "Gamma", order: 20 } }
+  ];
+  const nav = env.el("nav", { class: "panelList" });
+  env.body.appendChild(nav);
+  const add = function (label, top) {
+    const b = env.el("button", { "aria-label": label }, { left: 0, top: top, width: 200, height: 40 });
+    b.appendChild(env.el("span", { "data-slot": "sidebar.panellist" }));
+    nav.appendChild(b);
+  };
+  add("插件", 0);
+  add("自动化任务", 40);
+  add("Gamma", 100);
+  const anchor = env.el("div", { class: "moreAnchor" }, { left: 0, top: 160, width: 200, height: 40 });
+  const moreBtn = env.el("button", { "aria-haspopup": "menu", "aria-expanded": "true" }, { left: 0, top: 160, width: 200, height: 40 });
+  anchor.appendChild(moreBtn);
+  nav.appendChild(anchor);
+  env.flushFrames(10);
+
+  const divider = function () {
+    return env.document.querySelector(".lo-divider");
+  };
+  const opened = divider();
+  assert(!opened || opened.style.display !== "block", "divider must stay put while the More menu is open");
+
+  moreBtn.setAttribute("aria-expanded", "false");
+  // 菜单关掉会带来 DOM 变动，投影自然重跑；这里补一个节点确保观察器被触发。
+  nav.appendChild(env.el("span", { "data-testid": "tick" }));
+  env.flushFrames(10);
+  const closed = divider();
+  assert(closed && closed.style.display === "block", "divider must come back after the menu closes");
+  eq(closed.style.top, "90px", "divider sits between the official block and the first third-party row");
+}
+
 // ---------------------------------------------------------------- 跑
 
 const CASES = [
@@ -271,7 +350,11 @@ const CASES = [
   ["rows-cancel", caseRowsCancel],
   ["list-reorder", caseListReorder],
   ["stash-restore", caseStashRestore],
-  ["more-reorder-cancel", caseMoreReorderAndCancel]
+  ["more-reorder-cancel", caseMoreReorderAndCancel],
+  ["right-click-menu", casePlainRightClickOpensMenu],
+  ["ctrl-right-into-more", caseCtrlRightTucksIntoMore],
+  ["ctrl-left-toggle", caseCtrlLeftTogglesEveryRow],
+  ["divider-frozen-while-menu-open", caseDividerFrozenWhileMoreMenuOpen]
 ];
 
 let passed = 0;

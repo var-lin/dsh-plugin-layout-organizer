@@ -110,6 +110,13 @@ function openMenu(event: MouseEvent, actions: MenuAction[]): void {
     text.className = CLASS.popText;
     text.textContent = action.label;
     item.appendChild(text);
+    if (action.shortcut) {
+      const hint = document.createElement("span");
+      hint.className = CLASS.popKey;
+      hint.setAttribute("aria-hidden", "true");
+      hint.textContent = action.shortcut;
+      item.appendChild(hint);
+    }
     item.onclick = function () {
       closeMenu();
       action.run();
@@ -127,6 +134,8 @@ interface MenuAction {
   label: string;
   // 官方菜单每项左侧的 14px 线性图标；不给就只剩文字，不会留下空的图标列。
   icon?: string;
+  // 右侧的快捷键提示（灰色小字），只给真正绑了组合键的那几项。
+  shortcut?: string;
   disabled: boolean;
   run: () => void;
 }
@@ -265,6 +274,9 @@ function menuTailActions(
     {
       label: intoMore ? t("action.outOfMore") : t("action.intoMore"),
       icon: intoMore ? ACTION_ICON_OUT_OF_MORE : MENU_ICON_ARCHIVE,
+      // 两个方向都能用手势：进更多是 Ctrl+右键，出更多也是同一颗键（否则「更多」里的行
+      // 右键看不出快捷键，用户 m01568 截图里「出更多」那行是空的）。
+      shortcut: gestureText(store.get().options.gestureMore) + " + " + t("gesture.right"),
       disabled: !inMoreScope || entry,
       run: function (): void {
         if (!inMoreScope || entry) return;
@@ -276,6 +288,7 @@ function menuTailActions(
     {
       label: hidden ? t("action.restore") : t("action.stash"),
       icon: hidden ? MENU_ICON_UNARCHIVE : MENU_ICON_ARCHIVE,
+      shortcut: hidden ? undefined : gestureText(store.get().options.gestureStash) + " + " + t("gesture.left"),
       disabled: false,
       run: function (): void {
         store.update(function (next: PluginState): void {
@@ -375,14 +388,142 @@ function managedRowFrom(target: EventTarget | null, x?: number, y?: number): HTM
   return rowAtPoint(selector, x, y);
 }
 
+// 鼠标手势：前缀 + 左键 = 收起 / 恢复，前缀 + 右键 = 进更多 / 出更多。
+// 行可能来自四处不同的东西（槽位行、设置页卡片行、「更多」菜单行、悬浮框里的行），各自的
+// 标记属性不一样，先统一认成 scope + id 再动作；前缀只比修饰键，鼠标键固定。
+interface GestureTarget {
+  scope: string;
+  id: string;
+}
+
+function gestureTargetOf(target: EventTarget | null, x?: number, y?: number): GestureTarget | null {
+  if (!target || !(target instanceof Element)) return null;
+  if (target.closest("input, textarea, [contenteditable='true'], [contenteditable='']")) return null;
+  let el = target.closest("[data-lo-more-key]") as HTMLElement | null;
+  if (el) {
+    const scope = el.getAttribute("data-lo-more-scope") || "";
+    const id = el.getAttribute("data-lo-more-id") || "";
+    if (scope && id) return { scope: scope, id: id };
+  }
+  el = target.closest("[data-lo-stash-scope]") as HTMLElement | null;
+  if (el) {
+    const scope = el.getAttribute("data-lo-stash-scope") || "";
+    const id = el.getAttribute("data-lo-stash-id") || "";
+    if (scope && id) return { scope: scope, id: id };
+  }
+  el = target.closest("[data-lo-list-id]") as HTMLElement | null;
+  if (el) {
+    const box = el.closest("[data-lo-list-scope]") as HTMLElement | null;
+    const scope = box ? box.getAttribute("data-lo-list-scope") || "" : "";
+    const id = el.getAttribute("data-lo-list-id") || "";
+    if (scope && id) return { scope: scope, id: id };
+  }
+  el = target.closest(rowSelector()) as HTMLElement | null;
+  if (el) {
+    const scope = el.getAttribute(MARKS.scope) || "";
+    const id = el.getAttribute(MARKS.id) || "";
+    if (scope && id) return { scope: scope, id: id };
+  }
+  if (typeof x !== "number" || typeof y !== "number") return null;
+  const stack = document.elementsFromPoint(x, y);
+  for (let i = 0; i < stack.length; i++) {
+    const hit = gestureTargetOf(stack[i]);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+function modifiersMatch(event: MouseEvent, keys: string[]): boolean {
+  for (let i = 0; i < MODIFIER_KEYS.length; i++) {
+    const key = MODIFIER_KEYS[i];
+    // 统一按 `=== true` 取：宿主事件里缺省的修饰键是 undefined，直接用会和 false 比不相等。
+    let down = event.metaKey === true;
+    if (key === "control") down = event.ctrlKey === true;
+    else if (key === "alt") down = event.altKey === true;
+    else if (key === "shift") down = event.shiftKey === true;
+    if (down !== (keys.indexOf(key) >= 0)) return false;
+  }
+  return true;
+}
+
+// 自己数位移、不走 click：拖动控制器在 document 上的「吞掉跟手 click」比 window 捕获晚一步，
+// 靠 click 判定会在手势 + 拖动刚起步时就把行收走。
+let loGesture: GestureTarget | null = null;
+let loGestureX = 0;
+let loGestureY = 0;
+let loGestureGuardUntil = 0;
+
+function onWindowPointerDown(event: PointerEvent): void {
+  loGesture = null;
+  const store = loMenuStore;
+  if (!store || event.button !== 0) return;
+  if (!modifiersMatch(event, store.get().options.gestureStash)) return;
+  const hit = gestureTargetOf(event.target, event.clientX, event.clientY);
+  if (!hit) return;
+  loGesture = hit;
+  loGestureX = event.clientX;
+  loGestureY = event.clientY;
+}
+
+// 指针被系统 / 触摸取消时不会再来 pointerup：留着旧目标会让下一次 pointerup 误收别行。
+function onWindowPointerCancel(): void {
+  loGesture = null;
+}
+
+function onWindowPointerUp(event: PointerEvent): void {
+  const hit = loGesture;
+  loGesture = null;
+  const store = loMenuStore;
+  if (!hit || !store || event.button !== 0) return;
+  if (!modifiersMatch(event, store.get().options.gestureStash)) return;
+  if (Math.abs(event.clientX - loGestureX) > LO_DRAG_THRESHOLD || Math.abs(event.clientY - loGestureY) > LO_DRAG_THRESHOLD) return;
+  event.preventDefault();
+  // 这里绝不能 stopPropagation：拖动控制器（drag-frame.ts）在 document 捕获阶段等 pointerup 收尾，
+  // 截在 window 上会让它以为指针一直按着——手势收起一颗之后整页进入拖动态、鼠标松开也不结束
+  // （用户 m01790）。click 已由下面的守门拦截，不需要再拦 pointerup。
+  loGestureGuardUntil = Date.now() + LO_CLICK_SUPPRESS_MS;
+  store.update(function (next: PluginState): void {
+    // 已经收起的行，手势反过来就是恢复；没收起过才收。同一颗键在两处都讲得通。
+    toggleHidden(next, hit.scope, hit.id);
+  });
+  // 手势也是「动过这一行」：清掉新按钮标红，别让它恢复后又红着（用户 m02493）。
+  clearFreshRow(hit.scope, hit.id);
+}
+
+// 手势之后紧跟的那一下 click 属于宿主按钮本身，别让它再触发一次宿主的动作。
+function onWindowClickGuard(event: MouseEvent): void {
+  if (Date.now() >= loGestureGuardUntil) return;
+  loGestureGuardUntil = 0;
+  event.preventDefault();
+  event.stopPropagation();
+}
+
 function onWindowContextMenu(event: MouseEvent): void {
+  const store = loMenuStore;
+  if (!store) return;
+  // 手势只在修饰键完全匹配时才接管；否则必须原样放行——位置管理卡片行的菜单挂在 React 的
+  // `onContextMenu` 上，这里若先 preventDefault + stopPropagation，事件到不了 React 根节点，
+  // 普通右键就再也弹不出菜单（用户 m01368 的回归）。
+  if (modifiersMatch(event, store.get().options.gestureMore)) {
+    const hit = gestureTargetOf(event.target, event.clientX, event.clientY);
+    if (!hit) return;
+    const state = store.get();
+    if (isHidden(state, hit.scope, hit.id) || !canTuckIntoMore(hit.scope, hit.id)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    // 同一节点上还有「更多」菜单自己的 contextmenu 监听，它会再开一次行菜单；
+    // 用 stopImmediatePropagation 把后续监听一并停掉（用户 m01568）。
+    event.stopImmediatePropagation();
+    store.update(function (next: PluginState): void {
+      toggleIntoMore(next, hit.scope, hit.id);
+    });
+    return;
+  }
   const row = managedRowFrom(event.target, event.clientX, event.clientY);
   if (!row) return;
   const scope = row.getAttribute(MARKS.scope);
   const id = row.getAttribute(MARKS.id);
   if (!scope || !id) return;
-  const store = loMenuStore;
-  if (!store) return;
   event.preventDefault();
   event.stopPropagation();
   const axis = containerAxis(row, scope);
@@ -396,6 +537,25 @@ function onWindowContextMenu(event: MouseEvent): void {
 
 let loMenuStore: StoreHandle | null = null;
 let loRowMenuBound = false;
+let loRowMenuOff: (() => void) | null = null;
+
+/**
+ * 一组 window 捕获监听的挂 / 摘。
+ *
+ * 「装的时候一个个 add、卸的时候一个个 remove」写过三遍（行菜单、「更多」菜单、拖拽骨架），
+ * 漏一个就是监听器留到下一次装载，所以收成一处：返回的 disposer 一定是全摘。
+ *
+ * @param handlers 事件名 → 处理函数。
+ * @returns 摘掉这一整组的函数。
+ */
+function bindWindowCapture(handlers: Record<string, (event: any) => void>): () => void {
+  const types = Object.keys(handlers);
+  let i;
+  for (i = 0; i < types.length; i++) window.addEventListener(types[i], handlers[types[i]], true);
+  return function (): void {
+    for (let j = 0; j < types.length; j++) window.removeEventListener(types[j], handlers[types[j]], true);
+  };
+}
 
 function installRowMenu(store: StoreHandle): void {
   loMenuStore = store;
@@ -404,14 +564,21 @@ function installRowMenu(store: StoreHandle): void {
   // 之后右键一次会开出两层菜单（第二次再也关不干净）。
   if (loRowMenuBound) return;
   loRowMenuBound = true;
-  window.addEventListener("contextmenu", onWindowContextMenu, true);
+  loRowMenuOff = bindWindowCapture({
+    contextmenu: onWindowContextMenu,
+    pointerdown: onWindowPointerDown,
+    pointerup: onWindowPointerUp,
+    pointercancel: onWindowPointerCancel,
+    click: onWindowClickGuard
+  });
 }
 
 function uninstallRowMenu(): void {
-  if (loRowMenuBound) {
-    window.removeEventListener("contextmenu", onWindowContextMenu, true);
-    loRowMenuBound = false;
+  if (loRowMenuOff) {
+    loRowMenuOff();
+    loRowMenuOff = null;
   }
+  loRowMenuBound = false;
   loMenuStore = null;
   uninstallMenuBindings();
 }

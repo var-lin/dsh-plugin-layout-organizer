@@ -34,6 +34,7 @@ const CSS_TEXT: string[] = [
   ".lo-pop-icon{display:inline-flex;flex:none;width:14px;height:14px;align-items:center;justify-content:center;color:var(--dsw-alias-menu-icon,currentColor)}",
   ".lo-pop-icon svg{width:14px;height:14px}",
   ".lo-pop-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+  ".lo-pop-key{flex:none;margin-left:14px;color:var(--dsw-alias-label-tertiary,#6b7280);font-size:11px;line-height:16px;letter-spacing:.2px;white-space:nowrap}",
 
   // 位置全由行内样式给出：启动器可拖动，吸附到松手时所在的那条边。
   ".lo-launcher{position:fixed;z-index:" + Z_LAUNCHER + ";display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 11px;border:0;border-radius:999px;background:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-inverted,#fff);font:inherit;font-size:12px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,.28);cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none;transition:box-shadow .14s ease,opacity .14s ease}",
@@ -132,6 +133,8 @@ const CSS_TEXT: string[] = [
   // 槽色是 --dsw-alias-interactive-bg-hover（浅色主题下 6% 深蓝叠加、读作浅灰），
   // 不是 bg-base / bg-layer-1 / bg-layer-2——浅色主题里这三个别名全是同一个 #fff，用它们槽会消失。
   // 药丸是 bg-layer-1 加 elevation-soft 阴影，浮在槽上；未选中项只有灰字，悬停才转近黑。
+  // 标题行与分页导航之间只留 .lo-page 的 14px 行距，不再额外加 margin——中间那块不画东西，
+  // 多了就只剩一条空带（用户 m03469）。
   ".lo-tabs{flex:0 0 auto;display:flex;gap:2px;padding:4px;border:0;border-radius:var(--dsw-radius-md,12px);background:var(--dsw-alias-interactive-bg-hover,rgba(38,49,72,.06))}",
   ".lo-tab{flex:1 1 auto;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:34px;padding:0 18px;border:0;border-radius:var(--dsw-radius-sm,8px);background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:13.5px;font-weight:500;white-space:nowrap;cursor:pointer;transition:color .12s ease}",
   ".lo-tab:hover:not([data-active='1']){color:var(--dsw-alias-label-primary)}",
@@ -250,9 +253,6 @@ const CSS_TEXT: string[] = [
   ".lo-row-id{flex:0 0 auto;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-secondary)}",
   // 新按钮的名字标红：只改字色，不加角标、不占列宽（用户 m02614）。
   ".lo-row-name[data-fresh='1']{color:var(--dsw-alias-state-error-primary,#e03131);font-weight:600}",
-  // 顶部的「有新按钮」提示条：一行字加一颗按钮，语气与标题行那条成功回执一致。
-  ".lo-fresh{display:flex;align-items:center;gap:10px;margin:0 0 10px;padding:8px 12px;border:1px solid var(--dsw-alias-brand-primary,#4d6bfe);border-radius:10px;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-primary)}",
-  ".lo-fresh-text{flex:1 1 auto;min-width:0}",
 
   // 布局预设：名称输入框 + 保存 / 覆盖按钮一行，下面是预设行（名字 + 应用 + 删除）。
   ".lo-preset-save{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:0 14px}",
@@ -269,12 +269,12 @@ const CSS_TEXT: string[] = [
   ".lo-row-ico>svg{width:16px;height:16px}",
   ".lo-row-ico-text{background:var(--dsw-alias-interactive-bg-hover,#2631480f);font-size:10px;font-weight:600}",
   ".lo-note{padding:8px 14px;font-size:12px;line-height:1.6;color:var(--dsw-alias-label-secondary)}",
-  ".lo-warn{margin:0;padding:9px 13px;border:1px solid var(--dsw-alias-state-warn-primary);border-radius:10px;font-size:12px;line-height:1.55;color:var(--dsw-alias-state-warn-primary)}",
 
   ".lo-keyrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;width:100%}",
   ".lo-keyrow-end{margin-left:auto}",
   ".lo-keys{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-height:30px;min-width:120px;padding:0 12px;border:1px dashed var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-base);font-size:12px;color:var(--dsw-alias-label-primary);cursor:pointer;transition:border-color .12s ease,color .12s ease}",
   ".lo-keys:hover{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}",
+  "input.lo-keys{font-family:inherit;font-size:12px;line-height:1;text-align:center;outline:none;cursor:text}",
   ".lo-keys[data-recording='1']{border-style:solid;border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-brand-primary)}",
   ".lo-keys[data-empty='1']{color:var(--dsw-alias-label-secondary)}",
   ".lo-shortcut-msg{display:block;padding:0 14px 10px;font-size:12px;line-height:1.5}",

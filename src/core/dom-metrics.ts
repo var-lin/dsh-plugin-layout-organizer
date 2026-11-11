@@ -108,16 +108,25 @@ function rememberRowIcon(scope: string, id: string, el: HTMLElement | null): voi
  * 从投影的 style.order 读回屏幕上的顺序。
  *
  * @param scope scope 键。
+ * @param state 传入时只取「此刻看得见」的行：跳过已收起 / 已进「更多」与还没被投影写过
+ *   style.order 的行（收起前的落位要用这一版，见 `visibleOrder`）。
  * @returns 去重后的 id 列表，按 order 升序排列。
  */
-function liveOrder(scope: string): string[] {
+function liveOrder(scope: string, state?: PluginState): string[] {
   const nodes = document.querySelectorAll("[" + MARKS.scope + '="' + scope + '"][' + MARKS.id + "]");
   const rows: { id: string; order: number; at: number }[] = [];
   for (let i = 0; i < nodes.length; i++) {
     const node = nodes[i] as HTMLElement;
     const id = node.getAttribute(MARKS.id);
     if (!id) continue;
-    rows.push({ id: id, order: parseInt(node.style.order, 10) || 0, at: i });
+    if (state) {
+      if (isHidden(state, scope, id) || isIntoMoreRow(state, scope, id)) continue;
+      const order = parseInt(node.style.order, 10);
+      if (isNaN(order)) continue;
+      rows.push({ id: id, order: order, at: i });
+    } else {
+      rows.push({ id: id, order: parseInt(node.style.order, 10) || 0, at: i });
+    }
   }
   rows.sort(function (a, b) {
     return a.order - b.order || a.at - b.at;
@@ -125,4 +134,57 @@ function liveOrder(scope: string): string[] {
   const out: string[] = [];
   for (let i = 0; i < rows.length; i++) if (out.indexOf(rows[i].id) < 0) out.push(rows[i].id);
   return out;
+}
+
+/**
+ * 屏幕上的可见顺序（不含已收起 / 已进「更多」的行）。
+ *
+ * 收起一行之前要把它此刻的位置写进存档：收起后它就没有屏幕序号了，而拖别人 /「官方在前」
+ * 只会写这一轮看得见的行，位置没进存档的行恢复时就会被当成新行追到末尾（用户 m00001）。
+ *
+ * @param state 当前状态，用来判断哪些行已经让位。
+ * @param scope scope 键。
+ * @returns 按屏幕顺序排列的 id；这一处不在屏幕上时为空数组。
+ */
+function visibleOrder(state: PluginState, scope: string): string[] {
+  return liveOrder(scope, state);
+}
+
+/**
+ * 把一行按它此刻在 DOM 里的位置插进保存顺序。
+ *
+ * 只给「从收起 / 更多里恢复、但存档里没有位置」的行用：老版本曾在收起时把位置写丢，
+ * 恢复时若当新行追尾就会又跑到最后（用户 m00001）。这里的锚点是它在宿主 DOM 里的前后邻居，
+ * 不改变「全新行一律排在末尾」的语义。
+ *
+ * @param state 当前状态，原地改写 `order`。
+ * @param scope scope 键。
+ * @param id 要落位的行。
+ */
+function anchorUnsavedRow(state: PluginState, scope: string, id: string): void {
+  const order = state.order[scope] || [];
+  if (order.indexOf(id) >= 0) return;
+  const nodes = document.querySelectorAll("[" + MARKS.scope + '="' + scope + '"][' + MARKS.id + "]");
+  let at = -1;
+  let i: number;
+  for (i = 0; i < nodes.length; i++) {
+    if ((nodes[i] as HTMLElement).getAttribute(MARKS.id) === id) {
+      at = i;
+      break;
+    }
+  }
+  let to = -1;
+  if (at >= 0) {
+    for (i = at - 1; i >= 0 && to < 0; i--) {
+      const found = order.indexOf((nodes[i] as HTMLElement).getAttribute(MARKS.id) || "");
+      if (found >= 0) to = found + 1;
+    }
+    for (i = at + 1; i < nodes.length && to < 0; i++) {
+      const found = order.indexOf((nodes[i] as HTMLElement).getAttribute(MARKS.id) || "");
+      if (found >= 0) to = found;
+    }
+  }
+  const next = order.slice();
+  next.splice(to < 0 ? next.length : to, 0, id);
+  writeOrder(state, scope, next);
 }

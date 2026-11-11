@@ -272,13 +272,15 @@ function installMoreGestures(): void {
   loMoreGestureRefs++;
   if (loMoreGesturesBound) return;
   loMoreGesturesBound = true;
-  window.addEventListener("pointerdown", moreGestureDown, true);
-  window.addEventListener("mousedown", moreGestureMouseDown, true);
-  window.addEventListener("pointermove", moreGestureMove, true);
-  window.addEventListener("pointerup", moreGestureUp, true);
-  window.addEventListener("pointercancel", moreGestureCancel, true);
-  window.addEventListener("contextmenu", moreGestureContext, true);
-  window.addEventListener("click", moreGestureClick, true);
+  loMoreGestureOff = bindWindowCapture({
+    pointerdown: moreGestureDown,
+    mousedown: moreGestureMouseDown,
+    pointermove: moreGestureMove,
+    pointerup: moreGestureUp,
+    pointercancel: moreGestureCancel,
+    contextmenu: moreGestureContext,
+    click: moreGestureClick
+  });
 }
 
 /**
@@ -289,12 +291,8 @@ function uninstallMoreGestures(): void {
   if (loMoreGestureRefs > 0) return;
   if (!loMoreGesturesBound) return;
   loMoreGesturesBound = false;
-  if (typeof window === "undefined") return;
-  window.removeEventListener("pointerdown", moreGestureDown, true);
-  window.removeEventListener("mousedown", moreGestureMouseDown, true);
-  window.removeEventListener("pointermove", moreGestureMove, true);
-  window.removeEventListener("pointerup", moreGestureUp, true);
-  window.removeEventListener("pointercancel", moreGestureCancel, true);
-  window.removeEventListener("contextmenu", moreGestureContext, true);
-  window.removeEventListener("click", moreGestureClick, true);
+  if (loMoreGestureOff) {
+    loMoreGestureOff();
+    loMoreGestureOff = null;
+  }
 }

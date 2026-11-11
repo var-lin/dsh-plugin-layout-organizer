@@ -356,12 +356,8 @@ function createDragController(store: StoreHandle): { attach: () => void; detach:
         next.push(rid);
       }
     }
-    // 兜底：`order` 里有、屏上却没有的 id（隐藏行不排 order）也留住，排在末尾不影响已排好的顺序。
-    const savedIds: string[] = (store.get().order[finalScope] || []).slice();
-    for (let i = 0; i < savedIds.length; i++) {
-      if (next.indexOf(savedIds[i]) >= 0) continue;
-      next.push(savedIds[i]);
-    }
+    // 屏上没出现的已保存行（收起 / 进「更多」的行没有屏幕序号）交给 writeOrder 按存档邻居插回，
+    // 这里不能再把它们追到末尾——那正是「收起后一拖就跑到最后一行」的由来（用户 m00001）。
     store.update(function (state) {
       writeOrder(state, finalScope, next);
     });

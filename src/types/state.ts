@@ -115,6 +115,10 @@ interface StateOptions {
   // 「更多」菜单里画不画官方 / 第三方分隔线；与 `showDivider` 各管各的。
   // 每个「有下属行」的折叠键（如 allowDragOfficial / showDivider）-> 是否折叠；缺省视为展开。
   collapsed: Record<string, boolean>;
+  // 两个鼠标手势的前缀：「收起 / 恢复」= 前缀 + 左键，「进更多 / 出更多」= 前缀 + 右键。
+  // 只存修饰键（control / alt / shift / meta），鼠标键本身固定，见 dom-menu 的手势处理。
+  gestureStash: string[];
+  gestureMore: string[];
   launcherSide: string;
   launcherY: number | null;
 }

@@ -1,7 +1,7 @@
 const PLUGIN_ID = "dsh-plugin-layout-organizer";
 // 设置页大标题右侧展示的版本号。必须与 package.json 的 version 逐字一致——
 // test/accept.mjs 会断言两处相等，改版本时忘了同步这里会当场失败，而不是悄悄显示旧号。
-const PLUGIN_VERSION = "1.3.1";
+const PLUGIN_VERSION = "1.3.2";
 const NS = "layout-organizer";
 const STORAGE_KEY = "dsh.layout-organizer.state.v5";
 const STATE_VERSION = 5;
@@ -18,6 +18,8 @@ const OVERLAY_ID = "layout-organizer-overlay";
 
 // 收纳包的排序方式，共三种。
 const SORT_MODES: string[] = ["scope", "kind", "alpha"];
+// 鼠标手势的前缀只允许修饰键：鼠标键固定是左 / 右，前缀可配（用户 m01368）。
+const MODIFIER_KEYS: string[] = ["control", "alt", "shift", "meta"];
 const SORT_MODE_KEYS: Record<string, string> = {
   scope: "sort.scope",
   kind: "sort.kind",
@@ -260,6 +262,7 @@ const CLASS = {
   popItem: "lo-pop-item",
   popIcon: "lo-pop-icon",
   popText: "lo-pop-text",
+  popKey: "lo-pop-key",
   divider: "lo-divider"
 };
 
@@ -277,6 +280,42 @@ let __reporter: (message: string, error?: unknown) => void = function () {};
  */
 function t(key: string): string {
   return __translator(key);
+}
+
+/**
+ * 修饰键列表转成键帽文字，顺序固定为 Ctrl / Alt / Shift / Meta，与录入时的显示一致。
+ *
+ * 放在共享层：设置页要显示它，右键菜单的快捷键提示也要用它，别让 core 反过来依赖 ui。
+ *
+ * @param keys 修饰键列表，值域见 MODIFIER_KEYS。
+ * @returns 以 ` + ` 连接的文案；空列表返回空串。
+ */
+function gestureText(keys: string[]): string {
+  const out: string[] = [];
+  let i: number;
+  for (i = 0; i < MODIFIER_KEYS.length; i++) {
+    if (keys.indexOf(MODIFIER_KEYS[i]) < 0) continue;
+    out.push(t("gesture." + MODIFIER_KEYS[i]));
+  }
+  return out.join(" + ");
+}
+
+/**
+ * 从按键 / 鼠标事件里取出按住的修饰键（顺序同 MODIFIER_KEYS）。
+ *
+ * 键盘录制与鼠标手势录制是同一套取值规则，只有一处：缺省为 undefined 的事件字段一律按「没按」
+ * 处理，不能用 `!event.ctrlKey` 之外的真假判断去猜。
+ *
+ * @param event 任意带四个修饰键字段的事件。
+ * @returns 命中的修饰键名列表；一个都没按时为空数组。
+ */
+function modifierKeysOf(event: { ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean; metaKey?: boolean }): string[] {
+  const keys: string[] = [];
+  if (event.ctrlKey === true) keys.push("control");
+  if (event.altKey === true) keys.push("alt");
+  if (event.shiftKey === true) keys.push("shift");
+  if (event.metaKey === true) keys.push("meta");
+  return keys;
 }
 
 /**

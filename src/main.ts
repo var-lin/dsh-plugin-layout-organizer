@@ -53,9 +53,8 @@ function injectMoreSlot(
 }
 
 function apply(ctx: CtxLike): void {
-  const degraded: string[] = [];
-
-  // 消息经 console.warn 输出（打包产物唯一可用渠道），设置页再原样列一遍。
+  // 消息经 console.warn 输出（打包产物唯一可用渠道）。设置页不再展示降级列表（用户 m00313
+  // 要求「按钮行与导航之间」什么都不显示），所以这里只留日志，不再攒数组。
   setReporter(function (message: string): void {
     try {
       console.warn("[layout-organizer] " + message);
@@ -65,7 +64,6 @@ function apply(ctx: CtxLike): void {
   });
 
   function noteDegrade(message: string): void {
-    if (degraded.indexOf(message) < 0) degraded.push(message);
     warn(message);
   }
 
@@ -113,6 +111,9 @@ function apply(ctx: CtxLike): void {
   }
 
   const store = createStore();
+  // 收起 / 进「更多」前要把屏上顺序落盘，那一步要读 DOM：由接线层把投影的读法注入 store，
+  // 而不是让 store 反过来直接依赖 dom-metrics（纯状态测试时注入为空，行为退化为不动 order）。
+  setVisibleOrderProvider(visibleOrder);
   setActiveStore(store);
   setActiveContext(ctx);
   const organizer = createOrganizer(ctx, store, function (where: string, err: unknown): void {
@@ -125,16 +126,32 @@ function apply(ctx: CtxLike): void {
   // 宿主 0.2.2 起有了统一的右键菜单服务。它有 close()，但没有办法在我们开菜单时
   // 主动通知它；两扇同时开就是用户看到的那种叠在一起。把它的 close 交给行菜单，
   // 开我们这扇前先关掉它。老宿主没有这个服务，取不到就按没有处理。
-  try {
-    const hostMenus = ctx.get("contextMenus") as { close?: () => void } | null;
-    if (hostMenus && typeof hostMenus.close === "function") {
-      bindHostMenuCloser(function (): void {
-        hostMenus.close?.();
-      });
+  //
+  // 服务在调用时再取：`contextMenus` 由另一个插件在宿主启动时 provide，谁先加载不固定；
+  // 只在 apply() 里取一次的话，取早了就永远绑不上，「先开宿主菜单、再右键本插件的行」
+  // 就会两扇同时留在屏幕上（用户 m01368）。
+  bindHostMenuCloser(function (): void {
+    let hostMenus: { close?: () => void } | null = null;
+    try {
+      hostMenus = ctx.get("contextMenus") as { close?: () => void } | null;
+    } catch (err) {
+      hostMenus = null;
     }
-  } catch (err) {
-    // 老宿主没有 contextMenus 服务，静默降级：只关我们自己的菜单。
-  }
+    if (hostMenus && typeof hostMenus.close === "function") hostMenus.close();
+  });
+
+  // 桌面版的快捷键由原生键盘桥派发，DOM 上的 preventDefault 拦不住；录制期间必须请宿主
+  // 自己暂停派发（用户 m01368）。服务惰性取，缺方法时安静退回。
+  setShortcutRecordGuard(function (active: boolean): Promise<void> | void {
+    let service: { recording?: (on: boolean) => Promise<void> } | null = null;
+    try {
+      service = ctx.get("shortcuts") as { recording?: (on: boolean) => Promise<void> } | null;
+    } catch (err) {
+      service = null;
+    }
+    if (!service || typeof service.recording !== "function") return;
+    return service.recording(active);
+  });
 
   ctx.effect(function () {
     // 行菜单是窗口级捕获监听器，所以它一次覆盖所有 scope——包括从未打过标记的行。
@@ -150,6 +167,7 @@ function apply(ctx: CtxLike): void {
       organizer.stop();
       uninstallRowMenu();
       bindHostMenuCloser(null);
+      setShortcutRecordGuard(null);
       removeSurfaces();
       setActiveStore(null);
       setActiveContext(null);
@@ -197,7 +215,6 @@ function apply(ctx: CtxLike): void {
     return h(Boundary, null, h(SettingsPage, {
       ctx: ctx,
       store: store,
-      degraded: degraded,
       onOpenStash: openStash
     }));
   }

@@ -149,3 +149,32 @@ function isIntoMore(state: PluginState, scope: string, id: string): boolean {
 function isIntoMoreRow(state: PluginState, scope: string, id: string): boolean {
   return moreScopeOk(scope) && isIntoMore(state, scope, id);
 }
+
+// 卸载掉的插件会从台账里消失，但 id 还留在保存顺序里，没人再清理，数组只会越攒越长。
+// 只在台账完整的位置清：tabs / composer 的行会被宿主的宽度预算裁掉，缺行不代表卸载。
+const ORDER_PRUNE_SCOPES = ["settings", "sidebar", "right"];
+
+/**
+ * 丢掉保存顺序里「既不在了、也不是被收起」的 id。
+ *
+ * 在投影前调用：拿这一轮台账的 id 集合与保存顺序比对。已收起 / 已进「更多」的 id 即使这一轮
+ * 不在屏幕上也保留（它们还要能恢复原位）；台账为空时一律不动，避免整份位置暂时读不到时误清。
+ *
+ * @param state 当前状态，原地改写 `order[scope]`。
+ * @param scope 槽位 key。
+ * @param ids 这一轮台账（含合成行）给出的 id 集合。
+ */
+function dropStaleOrder(state: PluginState, scope: string, ids: string[]): void {
+  if (ORDER_PRUNE_SCOPES.indexOf(scope) < 0 || ids.length === 0) return;
+  const saved = state.order[scope] || [];
+  if (saved.length === 0) return;
+  const keep: Record<string, boolean> = {};
+  let i: number;
+  for (i = 0; i < ids.length; i++) keep[ids[i]] = true;
+  const next: string[] = [];
+  for (i = 0; i < saved.length; i++) {
+    const id = saved[i];
+    if (keep[id] || isHidden(state, scope, id) || isIntoMoreRow(state, scope, id)) next.push(id);
+  }
+  if (next.length !== saved.length) state.order[scope] = next;
+}

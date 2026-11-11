@@ -24,6 +24,8 @@ function defaultState(): PluginState {
       pruneStash: true,
       separateMore: true,
       collapsed: {},
+      gestureStash: ["control"],
+      gestureMore: ["control"],
       launcherSide: LAUNCHER_SIDE_DEFAULT,
       // null 表示「顶栏下方紧跟的位置」；数字表示距窗口顶部的像素距离。
       launcherY: null
@@ -113,6 +115,18 @@ function asFlagMap(value: unknown): Record<string, boolean> {
   });
 }
 
+// 修饰键列表：只认 MODIFIER_KEYS 里的值，去重；一个都不剩说明存档坏了，取出厂值。
+function asModifierList(value: unknown, fallback: string[]): string[] {
+  if (!Array.isArray(value)) return fallback.slice();
+  const kept: string[] = [];
+  let i;
+  for (i = 0; i < value.length; i++) {
+    const one = value[i];
+    if (typeof one === "string" && MODIFIER_KEYS.indexOf(one) >= 0 && kept.indexOf(one) < 0) kept.push(one);
+  }
+  return kept.length > 0 ? kept : fallback.slice();
+}
+
 // 时间戳表：记下每个按钮第一次被看见的时刻，用来判「新装的按钮」（见 fresh-rows.ts）。
 function asNumberMap(value: unknown): Record<string, number> {
   return asMap<number>(value, function (one: unknown): number | null {
@@ -195,6 +209,8 @@ function normalizeState(raw: unknown): PluginState {
   base.options.separateMore = boolOr(options, "separateMore", base.options.separateMore);
   // 折叠状态同理：展开=false 也要记住，不然每次重开设置页都会自己摊开。
   base.options.collapsed = asFlagMap(options.collapsed);
+  base.options.gestureStash = asModifierList(options.gestureStash, base.options.gestureStash);
+  base.options.gestureMore = asModifierList(options.gestureMore, base.options.gestureMore);
   const launcherSide = options.launcherSide;
   base.options.launcherSide = typeof launcherSide === "string" && LAUNCHER_SIDES.indexOf(launcherSide) >= 0 ? launcherSide : LAUNCHER_SIDE_DEFAULT;
   const launcherY = options.launcherY;
@@ -227,7 +243,10 @@ function normalizeState(raw: unknown): PluginState {
       let j;
       for (j = 0; j < list.length; j++) {
         const id: unknown = list[j];
-        if (typeof id === "string" && clean.indexOf(id) < 0) clean.push(id);
+        // DOM 文字 / 图标类名兜底出来的假 id（text: / cls:）不进存档：同名按钮会串行，
+        // 换了语言更对不上。老版本把它们写过进去，读的时候顺手清掉（用户 m00254）。
+        if (typeof id !== "string" || id.indexOf("text:") === 0 || id.indexOf("cls:") === 0) continue;
+        if (clean.indexOf(id) < 0) clean.push(id);
       }
       base.order[scope] = clean;
     }

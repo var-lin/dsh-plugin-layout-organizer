@@ -2,7 +2,6 @@
 interface SettingsPageProps {
   ctx: CtxLike;
   store: StoreHandle;
-  degraded?: string[];
   onOpenStash?: () => void;
 }
 
@@ -409,29 +408,7 @@ function SettingsPage(props: SettingsPageProps): any {
       )
     ),
 
-    // 有「新按钮」待整理时的提示条：行名旁边那些角标加起来有几个，这里一次说清；
-    // 右侧按钮是「全都认下了」，省得一个个去点。没有新按钮时整条不画。
-    freshCount() > 0
-      ? h("div", { className: "lo-fresh" },
-          h("span", { className: "lo-fresh-text" }, t("note.fresh").replace("{count}", String(freshCount()))),
-          h(Btn, {
-            onClick: function () {
-              clearAllFresh();
-              sayNotice(t("note.freshClear"), "ok");
-            }
-          }, t("action.markFreshRead"))
-        )
-      : null,
-
-    (props.degraded && props.degraded.length > 0)
-      ? h("div", { className: "lo-warn" },
-          h("div", null, t("note.degrade")),
-          props.degraded.map(function (message: string, index: number) {
-            return h("div", { key: index }, "\u00b7 " + message);
-          })
-        )
-      : null,
-
+    // 标题行按钮与分页导航之间保持空着：这里不再画任何提示条（用户 m00313）。
     h("div", { className: "lo-tabs", role: "tablist" }, navButtons),
 
     tab === "layout"

@@ -66,6 +66,7 @@ const ZH: Record<string, string> = {
   "action.restore": "恢复",
   "action.intoMore": "进更多",
   "action.outOfMore": "出更多",
+  // 右键菜单里右侧的快捷键提示（用户 m01250）：Ctrl + 左键收起、Ctrl + 右键进更多。
   // 禁用态的提示：说清是「这一行本来就不收」而不是「暂时点不动」。
   "action.intoMoreBlocked": "这一行不能收进「更多」",
   // 三颗「更多」入口的改判按钮：位置钉死在末尾，也没有可切的另一段。
@@ -126,15 +127,12 @@ const ZH: Record<string, string> = {
   "action.redo": "还原",
   "action.redo.hint": "把刚撤销的那一步重新做回来",
   "action.redo.none": "没有可以还原的步骤",
-  "action.markFreshRead": "全部标记已知",
 
   "note.exported": "配置已导出。",
   "note.importOk": "导入成功，配置已更新。",
   "note.importFail": "导入失败：这不是本插件导出的配置文件。",
   "note.undone": "已撤销上一步。",
   "note.redone": "已还原上一步。",
-  "note.fresh": "有 {count} 个新按钮还没整理。",
-  "note.freshClear": "已全部标记为已知。",
 
   "empty.stash": "这里还没有内容。在任意按钮上右键，选「收起」就会放进来。",
   "empty.list": "这里还没有按钮。",
@@ -171,9 +169,25 @@ const ZH: Record<string, string> = {
   "shortcut.invalid": "这个组合键不可用：{reason}",
   "shortcut.conflict": "已被占用：{list}",
   "shortcut.failed": "保存失败（{status}），快捷键未改动。",
+  "shortcut.recordFailed": "系统按键保护没启用，录制期间其他快捷键可能仍会触发。",
   "shortcut.hint": "快捷键同样可以在 DSH 的「快捷键」设置里修改。",
 
-  "note.degrade": "部分能力不可用，已自动降级：",
+  "gesture.control": "Ctrl",
+  "gesture.alt": "Alt",
+  "gesture.shift": "Shift",
+  "gesture.meta": "Meta",
+  "gesture.left": "左键",
+  "gesture.right": "右键",
+  "gesture.stashLabel": "收起 / 恢复",
+  "gesture.moreLabel": "进更多 / 出更多",
+  "gesture.stashHint": "前缀可改，鼠标键固定左键：按下收起，已收起则恢复。",
+  "gesture.moreHint": "前缀可改，鼠标键固定右键：按下进更多，已在更多则出更多。",
+  "gesture.record": "点击后按下修饰键（Ctrl / Alt / Shift / Meta），Enter 或移开焦点保存，Esc 取消",
+  "gesture.recording": "按下修饰键…",
+  "gesture.saved": "手势已保存。",
+  // 手势前缀的校验（用户 m01368 建议 3）：空前缀会让手势彻底失效；两侧同前缀只提示、不拦。
+  "gesture.prefixEmpty": "前缀不能为空：至少按一个修饰键（Ctrl / Alt / Shift / Meta）。",
+  "gesture.prefixSame": "两侧手势前缀相同，用左 / 右键区分动作。",
 
   "nav.failed": "无法打开「{label}」，该按钮可能已不可用。"
 };
@@ -297,15 +311,12 @@ const EN: Record<string, string> = {
   "action.redo": "Redo",
   "action.redo.hint": "Reapply the step you just undid",
   "action.redo.none": "Nothing to redo",
-  "action.markFreshRead": "Mark all as seen",
 
   "note.exported": "Configuration exported.",
   "note.importOk": "Imported; the configuration is updated.",
   "note.importFail": "Import failed: that is not a configuration file exported by this plugin.",
   "note.undone": "Undone.",
   "note.redone": "Redone.",
-  "note.fresh": "{count} new buttons have not been organized yet.",
-  "note.freshClear": "All marked as seen.",
 
   "empty.stash": "Nothing here yet. Right-click any button and choose Tuck away to put it here.",
   "empty.list": "No buttons here yet.",
@@ -341,9 +352,24 @@ const EN: Record<string, string> = {
   "shortcut.invalid": "That combination is not usable: {reason}",
   "shortcut.conflict": "Already taken by: {list}",
   "shortcut.failed": "Could not save ({status}); the shortcut is unchanged.",
+  "shortcut.recordFailed": "System key protection is unavailable; other shortcuts may still fire while recording.",
   "shortcut.hint": "The shortcut can also be changed in the DSH Shortcuts settings.",
 
-  "note.degrade": "Some capabilities are unavailable; running degraded:",
+  "gesture.control": "Ctrl",
+  "gesture.alt": "Alt",
+  "gesture.shift": "Shift",
+  "gesture.meta": "Meta",
+  "gesture.left": "Left click",
+  "gesture.right": "Right click",
+  "gesture.stashLabel": "Tuck / restore",
+  "gesture.moreLabel": "Into / out of more",
+  "gesture.stashHint": "Prefix is configurable; the mouse button is fixed to left: click tucks, or restores when it is already tucked.",
+  "gesture.moreHint": "Prefix is configurable; the mouse button is fixed to right: click moves into “More”, or out when it is already there.",
+  "gesture.record": "Click, then press modifiers (Ctrl / Alt / Shift / Meta); Enter or blur saves, Esc cancels",
+  "gesture.recording": "Press modifiers…",
+  "gesture.saved": "Gesture saved.",
+  "gesture.prefixEmpty": "The prefix cannot be empty: press at least one modifier (Ctrl / Alt / Shift / Meta).",
+  "gesture.prefixSame": "Both gestures use the same prefix; the left / right button tells them apart.",
 
   "nav.failed": "Could not open “{label}”; that button may no longer be available."
 };

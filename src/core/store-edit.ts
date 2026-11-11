@@ -17,7 +17,16 @@ function reconcileOrder(state: PluginState, scope: string, discovered: string[])
   if (mixedOrder(state)) {
     const mixed: string[] = [];
     for (i = 0; i < saved.length; i++) if (known[saved[i]]) mixed.push(saved[i]);
-    for (i = 0; i < discovered.length; i++) if (saved.indexOf(discovered[i]) < 0) mixed.push(discovered[i]);
+    const stowed: string[] = [];
+    for (i = 0; i < discovered.length; i++) {
+      const id = discovered[i];
+      if (saved.indexOf(id) >= 0) continue;
+      // 收起 / 进「更多」的行不是「新行」：混排下追尾会让它一收起就跳到最下面（m00001），
+      // 先记下，等其余行落位后贴邻居插回。
+      if (isHidden(state, scope, id) || isIntoMoreRow(state, scope, id)) stowed.push(id);
+      else mixed.push(id);
+    }
+    for (i = 0; i < stowed.length; i++) spliceNear(mixed, discovered, stowed[i]);
     return mixed;
   }
   for (i = 0; i < saved.length; i++) {
@@ -25,11 +34,41 @@ function reconcileOrder(state: PluginState, scope: string, discovered: string[])
     if (!known[id]) continue;
     (kindOf(state, scope, id) === "official" ? official : third).push(id);
   }
+  const stowed: string[] = [];
   for (i = 0; i < discovered.length; i++) {
-    if (saved.indexOf(discovered[i]) >= 0) continue;
-    (kindOf(state, scope, discovered[i]) === "official" ? official : third).push(discovered[i]);
+    const id = discovered[i];
+    if (saved.indexOf(id) >= 0) continue;
+    if (isHidden(state, scope, id) || isIntoMoreRow(state, scope, id)) stowed.push(id);
+    else (kindOf(state, scope, id) === "official" ? official : third).push(id);
+  }
+  // 分组排序下同样别把收起的行当成新行甩到组末：贴着发现顺序里的同组邻居插回去。
+  for (i = 0; i < stowed.length; i++) {
+    spliceNear(kindOf(state, scope, stowed[i]) === "official" ? official : third, discovered, stowed[i]);
   }
   return official.concat(third);
+}
+// 把 id 插到 ref 里它自己那个位置的前后邻居旁边（邻居都还没进 list 时追尾）。
+function spliceNear(list: string[], ref: string[], id: string): void {
+  const at = ref.indexOf(id);
+  let to = -1;
+  let j: number;
+  for (j = at - 1; j >= 0; j--) {
+    const found = list.indexOf(ref[j]);
+    if (found >= 0) {
+      to = found + 1;
+      break;
+    }
+  }
+  if (to < 0) {
+    for (j = at + 1; j < ref.length; j++) {
+      const found = list.indexOf(ref[j]);
+      if (found >= 0) {
+        to = found;
+        break;
+      }
+    }
+  }
+  list.splice(to < 0 ? list.length : to, 0, id);
 }
 
 /**
@@ -59,9 +98,7 @@ function scopeDirty(state: PluginState, scope: string): boolean {
  * 只比对 `resetAll` 真正会改写的那五样（order / kinds / hidden / intoMore / moreOrder / options）；
  * `stashSort` 不在其中，它是收纳包的排序偏好，重置配置不会动它，因此也不该让它把按钮点亮。
  * 这份清单必须与 `settings-page` 里 `onConfirm` 实际写回的字段一一对应，否则按钮会常亮却点不动。
- *
- * 键序是确定的，可以直接 `JSON.stringify`：`normalizeState` 按 SCOPES 顺序重建 `order`、按固定字段
- * 顺序重建 `options`，而 `kinds` / `hidden` 的参照物是空对象——只要有键就必然判为有差异。
+ * 键序是确定的，可以直接 `JSON.stringify`：normalize 按固定顺序重建各表。
  *
  * @param state 当前状态。
  * @returns 与出厂状态有差异时为真。
@@ -118,20 +155,37 @@ function setCollapsed(state: PluginState, key: string, collapsed: boolean): void
   state.options.collapsed[key] = collapsed;
 }
 
+// 收起 / 进「更多」前先把握屏上顺序落盘：之后拖别人只写看得见的行，没存档的会被当成新行追尾（m00001/m00883）。
+// 读屏幕顺序要碰 DOM，由接线层注入 provider；未注入时没有可视顺序，退化为不动 order。
+let __visibleOrder: ((state: PluginState, scope: string) => string[]) | null = null;
+function setVisibleOrderProvider(fn: ((state: PluginState, scope: string) => string[]) | null): void { __visibleOrder = fn; }
+function pinOrder(state: PluginState, scope: string, id: string): void {
+  const live = __visibleOrder ? __visibleOrder(state, scope) : [];
+  if ((state.order[scope] || []).indexOf(id) < 0 && live.indexOf(id) >= 0) writeOrder(state, scope, live);
+}
+
 function setHidden(state: PluginState, scope: string, id: string, hidden: boolean): void {
   const key = rowKey(scope, id);
-  if (hidden) {
-    state.hidden[key] = true;
-    // 两处收纳互斥：进了收纳包就不该再留在「更多」里，否则恢复时不知道以哪边为准。
-    delete state.intoMore[key];
-  } else delete state.hidden[key];
+  if (!hidden) {
+    delete state.hidden[key];
+    // 老版本曾在收起时把位置写丢；恢复时按 DOM 邻居补回，别又追到末尾（m00001）。
+    anchorUnsavedRow(state, scope, id);
+    return;
+  }
+  pinOrder(state, scope, id);
+  state.hidden[key] = true;
+  // 两处收纳互斥：进了收纳包就不该再留在「更多」里，否则恢复时不知道以哪边为准。
+  delete state.intoMore[key];
+}
+
+function toggleHidden(state: PluginState, scope: string, id: string): void {
+  setHidden(state, scope, id, !isHidden(state, scope, id));
 }
 
 /**
  * 把一行收进 / 移出官方「更多」菜单。
  *
- * 两处收纳互斥：收进「更多」时顺手清掉收纳包里的同名键，反之亦然（见 `setHidden`）。
- * 否则同一行会同时挂在两处，恢复时不知道以哪边为准。
+ * 两处收纳互斥：收进「更多」时顺手清掉收纳包里的同名键，反之亦然（见 `setHidden`），否则同一行会同时挂在两处。
  *
  * @param state 当前状态，原地改写 `intoMore`。
  * @param scope 槽位 key。
@@ -140,24 +194,45 @@ function setHidden(state: PluginState, scope: string, id: string, hidden: boolea
  */
 function setIntoMore(state: PluginState, scope: string, id: string, into: boolean): void {
   const key = rowKey(scope, id);
-  if (into) {
-    state.intoMore[key] = true;
-    delete state.hidden[key];
-  } else {
+  if (!into) {
     delete state.intoMore[key];
+    anchorUnsavedRow(state, scope, id);
+    return;
   }
+  pinOrder(state, scope, id);
+  state.intoMore[key] = true;
+  delete state.hidden[key];
+}
+
+function toggleIntoMore(state: PluginState, scope: string, id: string): void {
+  setIntoMore(state, scope, id, !isIntoMore(state, scope, id));
 }
 
 function writeOrder(state: PluginState, scope: string, ids: string[]): void {
-  state.order[scope] = ids.slice();
+  const saved = state.order[scope] || [];
+  const next: string[] = [];
+  let i: number;
+  for (i = 0; i < ids.length; i++) {
+    const id = ids[i];
+    if (!id || next.indexOf(id) >= 0) continue;
+    // 从 DOM 文字 / 图标类名兜底出来的 id 不稳定（同名按钮会重名、文案随语言变），
+    // 不写进存档，免得下一轮认出别人来（见 domIdOf）。
+    if (id.indexOf("text:") === 0 || id.indexOf("cls:") === 0) continue;
+    next.push(id);
+  }
+  // 这一轮没列出来的行（正收起、已进「更多」，或所在的整处位置暂时不在屏幕上）不能因为
+  // 别人挪了一下就从保存顺序里消失：它们要能回到原来的位置，而不是被当成新行追尾。
+  for (i = 0; i < saved.length; i++) {
+    if (next.indexOf(saved[i]) < 0) spliceNear(next, saved, saved[i]);
+  }
+  state.order[scope] = next;
 }
 
 /**
  * 在行自己所属的组内移动一行。
  *
- * 保存的顺序只有拖动才会写（见 `writeOrder`）；全新配置下 `order` 是空的，
- * 若只认它，设置页的 ↑ / ↓ 与右键菜单的上移 / 下移看着可点、点下去毫无反应。
- * 因此保存顺序里找不到这一行时，以屏幕上的当前顺序为基准（`liveOrder`，去掉已收纳的行）。
+ * 保存顺序只有拖动才会写；全新配置下 `order` 是空的，只认它会让设置页的 ↑ / ↓ 看着可点、
+ * 点下去毫无反应。找不到这一行时以屏幕顺序为基准（`liveOrder`，去掉已收纳的行），再走 `writeOrder`。
  *
  * @param state 当前状态，命中的话原地改写 `order`。
  * @param scope 槽位 key。
@@ -170,9 +245,17 @@ function moveRow(state: PluginState, scope: string, id: string, delta: number, g
   const saved = state.order[scope] || [];
   let list = saved.slice();
   if (list.indexOf(id) < 0) {
+    // 保存顺序里没有这一行（全新配置，或刚恢复过默认顺序）：以屏幕上的当前顺序为基准。
+    // 已收起 / 已进「更多」的行不在屏幕顺序里，但存档里可能记着它们原来的位置，先留着；
+    // 丢掉的话，挪动别的行就会顺手把这些行挤成「新行」、恢复后逐个跑到末尾。
     const live = liveOrder(scope);
-    list = [];
-    for (let i = 0; i < live.length; i++) if (!isHidden(state, scope, live[i])) list.push(live[i]);
+    let i;
+    for (i = 0; i < live.length; i++) {
+      const liveId = live[i];
+      if (list.indexOf(liveId) >= 0) continue;
+      if (isHidden(state, scope, liveId)) continue;
+      list.push(liveId);
+    }
   }
   const from = list.indexOf(id);
   if (from < 0) return false;
@@ -196,10 +279,9 @@ function moveRow(state: PluginState, scope: string, id: string, delta: number, g
   if (target < 0) return false;
   list.splice(from, 1);
   list.splice(target, 0, id);
-  state.order[scope] = list;
+  writeOrder(state, scope, list);
   return true;
 }
-
 /**
  * 恢复一个 scope 的布局：排序归零、收纳清空、手动分类一并清掉（回到自动判断）。
  *
@@ -226,5 +308,12 @@ function resetScope(state: PluginState, scope: string): void {
 }
 
 function restoreAllHidden(state: PluginState): void {
+  const keys = Object.keys(state.hidden);
   state.hidden = {};
+  // 一次恢复多行时同样按 DOM 邻居补位置：漏掉这一步，老存档里没记过位置的行会一起追尾。
+  for (let i = 0; i < keys.length; i++) {
+    const cut = keys[i].indexOf(":");
+    if (cut < 0) continue;
+    anchorUnsavedRow(state, keys[i].slice(0, cut), keys[i].slice(cut + 1));
+  }
 }

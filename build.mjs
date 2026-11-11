@@ -172,6 +172,15 @@ function listSources(dir, prefix) {
 const unlisted = listSources(srcDir, "").filter((rel) => BUILD_ORDER.indexOf(rel) < 0);
 if (unlisted.length > 0) fail(`source file(s) missing from BUILD_ORDER:\n  ${unlisted.join("\n  ")}`);
 
+// 版本号有两处（package.json 与 constants.ts 的 PLUGIN_VERSION）：accept 测试比对得太晚，
+// 构建时先对一遍——发版前漏改任何一处都直接失败，不用等测试跑完（建议 10）。
+const pkgVersion = JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
+const constVersion = /const PLUGIN_VERSION = "([^"]+)"/.exec(readFileSync(join(srcDir, "shared/constants.ts"), "utf8"));
+if (!constVersion) fail("src/shared/constants.ts has no PLUGIN_VERSION");
+if (constVersion[1] !== pkgVersion) {
+  fail(`PLUGIN_VERSION ${constVersion[1]} does not match package.json ${pkgVersion}`);
+}
+
 const modules = BUILD_ORDER.map((rel) => {
   const raw = readFileSync(join(srcDir, rel), "utf8");
   // 手写的 <svg> 绕过了归一化（颜色/尺寸/aria 都会漏），一律要求写成 `@@svg:` 占位符。

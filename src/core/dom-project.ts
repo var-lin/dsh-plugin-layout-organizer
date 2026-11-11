@@ -92,6 +92,26 @@ function isMoreEntry(scope: string, id: string): boolean {
 }
 
 /**
+ * 「更多」那扇菜单此刻是不是开着。
+ *
+ * 宿主打开侧栏「更多」时会把菜单内容挂进侧栏列表，这一轮收上来的行几何会跟着变，
+ * 分割线就被算到「更多」身上（用户 m03252：不打开菜单时线是对的）。菜单按钮带
+ * aria-expanded，用它判断；关掉菜单会再触发一轮投影，到那时线自然回到正确位置。
+ *
+ * @param rows 这一轮收集到的行元素（已打过 data-lo-id）。
+ * @returns 菜单打开时为真。
+ */
+function moreAnchorOpen(rows: HTMLElement[]): boolean {
+  for (let i = 0; i < rows.length; i++) {
+    const el = rows[i];
+    if (el.getAttribute(MARKS.id) !== MORE_ID) continue;
+    if (el.getAttribute("aria-expanded") === "true") return true;
+    if (el.querySelector("[aria-expanded='true']")) return true;
+  }
+  return false;
+}
+
+/**
  * 未认领的行从 DOM 派生稳定 id，只用标识属性不用位置。
  *
  * @param el 需要派生 id 的行元素。
@@ -184,6 +204,9 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): void {
   for (let i = 0; i < syntheticIds.length; i++) {
     if (syntheticIds[i] && ids.indexOf(syntheticIds[i]) < 0) ids.push(syntheticIds[i]);
   }
+
+  // 台账是这一处位置的完整名单：顺手清掉已卸载插件留下的孤儿 id，保存顺序不会越攒越长。
+  dropStaleOrder(state, scope, ids);
 
   const ordered = reconcileOrder(state, scope, ids);
   const byId: Record<string, LedgerEntry> = {};
@@ -356,6 +379,9 @@ function applyScope(ctx: CtxLike, store: StoreHandle, scope: string): void {
       else if (seenThird) interleaved = true;
     }
   }
+  // 「更多」菜单打开时，宿主会往侧栏里插菜单节点。这一轮测到的行几何不可靠，线会跑到「更多」身上；
+  // 菜单关掉会再触发一轮投影，到那时再摆（用户 m03252：不打开菜单线就是对的）。
+  if (scope === "sidebar" && dividerEnabled(state, scope) && moreAnchorOpen(rows)) return;
   if (dividerEnabled(state, scope) && !interleaved && visible.official.length > 0 && visible.third.length > 0) {
     const firstThird = visible.third[0].el;
     const lastOfficial = visible.official[visible.official.length - 1].el;
