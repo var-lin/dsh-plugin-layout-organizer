@@ -60,6 +60,9 @@ const CSS_TEXT: string[] = [
   ".lo-chip{padding:5px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:999px;background:transparent;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;cursor:pointer;text-align:center;transition:background .12s ease,border-color .12s ease,color .12s ease}",
   ".lo-chip[aria-pressed='true']{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-inverted,#fff)}",
   ".lo-chip:hover{border-color:var(--dsw-alias-border-l2);color:var(--dsw-alias-label-primary)}",
+  // 被另一个手势占用的鼠标键：灰着、点不动，但保留位置，让人知道为什么选不了。
+  ".lo-chip[disabled]{opacity:.45;cursor:not-allowed}",
+  ".lo-chip[disabled]:hover{border-color:var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary)}",
   ".lo-chip[aria-pressed='true']:hover{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary-inverted,#fff);filter:brightness(1.08)}",
   ".lo-stash-body{flex:1 1 auto;min-height:0;overflow:auto;padding:4px 12px 14px;display:flex;flex-direction:column;gap:4px;scrollbar-gutter:stable}",
   // 收纳包列表是固定高度的滚动区，行与分组标题都必须按内容定高。
@@ -186,6 +189,12 @@ const CSS_TEXT: string[] = [
   // 字重同样压回 400——卡片标题是 600，按钮继承会变粗。
   ".lo-card-action .lo-btn{min-height:24px;padding:0 9px;font-size:11.5px;font-weight:400;border-radius:7px}",
   ".lo-card-body{display:flex;flex-direction:column}",
+  // 卡片级说明（标题下、正文前）：和行内 hint 分开，别让人以为它只说明第一行。
+  // 卡片标题与说明：说明挂在标题正下方，字重恢复正常，不和标题抢眼。
+  ".lo-card-headtext{flex:1 1 auto;display:flex;flex-direction:column;gap:4px;min-width:0}",
+  // 标题行里的说明：与标题左对齐（标题行曾给行内说明留过 8px 左边距，这里要归零）。
+  ".lo-card-note{font-size:11.5px;font-weight:400;line-height:1.5;color:var(--dsw-alias-label-secondary)}",
+  ".lo-card-headtext>.lo-card-note{margin-left:0;font-size:12px}",
   // 卡片内部同理：字段行与行列表按内容定高，压缩只会让文字被裁掉。
   ".lo-card-body>*{flex:0 0 auto}",
   ".lo-field{display:flex;align-items:center;gap:14px;padding:11px 14px;border-top:1px solid var(--dsw-alias-border-l1)}",

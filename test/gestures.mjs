@@ -286,6 +286,18 @@ async function caseCtrlRightTucksIntoMore() {
   assert(env.document.querySelector(".lo-pop") === null, "gesture must not open the row menu");
 }
 
+async function caseCtrlRightFromHiddenTucksIntoMore() {
+  const { env, store } = await boot(seedState({ order: { sidebar: ["alpha", "beta", "gamma", "more"] }, hidden: { "sidebar:beta": true } }));
+  const rows = mountSidebar(env, ["alpha", "beta", "gamma"]);
+
+  env.dispatch("contextmenu", rows.beta, { clientX: 10, clientY: 60, button: 2, ctrlKey: true });
+
+  // 已收起的行按右键手势：进「更多」，同时把收起状态清掉；不能退回成弹右键菜单（用户 m03490）。
+  assert(store.get().intoMore["sidebar:beta"] === true, "ctrl+right on a tucked row did not move it into More");
+  assert(store.get().hidden["sidebar:beta"] !== true, "moving into More must clear the tucked state");
+  assert(env.document.querySelector(".lo-pop") === null, "gesture must not fall back to the row menu");
+}
+
 async function caseCtrlLeftTogglesEveryRow() {
   const { env, store } = await boot(seedState({ order: { sidebar: ["alpha", "beta", "gamma", "more"] } }));
   const rows = mountSidebar(env, ["alpha", "beta", "gamma"]);
@@ -300,6 +312,23 @@ async function caseCtrlLeftTogglesEveryRow() {
   env.dispatch("pointerdown", rows.alpha, { clientX: 10, clientY: 20, button: 0, ctrlKey: true });
   env.dispatch("pointerup", rows.alpha, { clientX: 10, clientY: 20, button: 0, ctrlKey: true });
   assert(store.get().hidden["sidebar:alpha"] !== true, "second gesture did not restore the row");
+}
+
+// 两个手势的鼠标键可以在设置里互换：右键收起、左键进「更多」也要照各自的键位生效（用户 m03830）。
+async function caseGestureButtonsSwapped() {
+  const { env, store } = await boot(seedState({
+    options: { gestureStashButton: "right", gestureMoreButton: "left" },
+    order: { sidebar: ["alpha", "beta", "gamma", "more"] }
+  }));
+  const rows = mountSidebar(env, ["alpha", "beta", "gamma"]);
+
+  env.dispatch("contextmenu", rows.beta, { clientX: 10, clientY: 60, button: 2, ctrlKey: true });
+  assert(store.get().hidden["sidebar:beta"] === true, "right click should tuck when the stash gesture uses the right button");
+  assert(env.document.querySelector(".lo-pop") === null, "gesture must not open the row menu");
+
+  env.dispatch("pointerdown", rows.gamma, { clientX: 10, clientY: 100, button: 0, ctrlKey: true });
+  env.dispatch("pointerup", rows.gamma, { clientX: 10, clientY: 100, button: 0, ctrlKey: true });
+  assert(store.get().intoMore["sidebar:gamma"] === true, "left click should move into More when the more gesture uses the left button");
 }
 
 // 「更多」菜单开着时侧栏那条线不动：宿主会把菜单节点挂进列表、行几何跟着变，
@@ -353,7 +382,9 @@ const CASES = [
   ["more-reorder-cancel", caseMoreReorderAndCancel],
   ["right-click-menu", casePlainRightClickOpensMenu],
   ["ctrl-right-into-more", caseCtrlRightTucksIntoMore],
+  ["ctrl-right-from-hidden", caseCtrlRightFromHiddenTucksIntoMore],
   ["ctrl-left-toggle", caseCtrlLeftTogglesEveryRow],
+  ["gesture-buttons-swapped", caseGestureButtonsSwapped],
   ["divider-frozen-while-menu-open", caseDividerFrozenWhileMoreMenuOpen]
 ];
 

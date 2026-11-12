@@ -276,7 +276,7 @@ function menuTailActions(
       icon: intoMore ? ACTION_ICON_OUT_OF_MORE : MENU_ICON_ARCHIVE,
       // 两个方向都能用手势：进更多是 Ctrl+右键，出更多也是同一颗键（否则「更多」里的行
       // 右键看不出快捷键，用户 m01568 截图里「出更多」那行是空的）。
-      shortcut: gestureText(store.get().options.gestureMore) + " + " + t("gesture.right"),
+      shortcut: gestureCombo(store.get().options.gestureMore, store.get().options.gestureMoreButton),
       disabled: !inMoreScope || entry,
       run: function (): void {
         if (!inMoreScope || entry) return;
@@ -288,7 +288,7 @@ function menuTailActions(
     {
       label: hidden ? t("action.restore") : t("action.stash"),
       icon: hidden ? MENU_ICON_UNARCHIVE : MENU_ICON_ARCHIVE,
-      shortcut: hidden ? undefined : gestureText(store.get().options.gestureStash) + " + " + t("gesture.left"),
+      shortcut: hidden ? undefined : gestureCombo(store.get().options.gestureStash, store.get().options.gestureStashButton),
       disabled: false,
       run: function (): void {
         store.update(function (next: PluginState): void {
@@ -449,18 +449,57 @@ function modifiersMatch(event: MouseEvent, keys: string[]): boolean {
 // 自己数位移、不走 click：拖动控制器在 document 上的「吞掉跟手 click」比 window 捕获晚一步，
 // 靠 click 判定会在手势 + 拖动刚起步时就把行收走。
 let loGesture: GestureTarget | null = null;
+// 这一下按到的行要做哪件事：stash（收起 / 恢复）还是 more（进 / 出「更多」）。
+// 两个手势的鼠标键都能在设置里换，所以按下的那一刻就要记下来，不能到松手再猜（用户 m03830）。
+let loGestureKind = "";
 let loGestureX = 0;
 let loGestureY = 0;
 let loGestureGuardUntil = 0;
 
+/**
+ * 这一下鼠标事件该走哪个手势：鼠标键与配置一致、修饰键完全匹配才算；收起优先。
+ *
+ * @param event 鼠标事件。
+ * @param button 这次事件的鼠标键 left / right。
+ * @param state 当前状态（读两项手势的前缀与键位）。
+ * @returns stash / more，或空串表示不归手势管。
+ */
+function gestureKindOf(event: MouseEvent, button: string, state: PluginState): string {
+  if (state.options.gestureStashButton === button && modifiersMatch(event, state.options.gestureStash)) return "stash";
+  if (state.options.gestureMoreButton === button && modifiersMatch(event, state.options.gestureMore)) return "more";
+  return "";
+}
+
+/**
+ * 按手势配置切换一行：收起 / 恢复，或进 / 出「更多」。
+ *
+ * @param store 状态句柄。
+ * @param kind stash / more。
+ * @param scope 槽位 key。
+ * @param id 行 id。
+ */
+function runGesture(store: StoreHandle, kind: string, scope: string, id: string): void {
+  store.update(function (next: PluginState): void {
+    if (kind === "stash") toggleHidden(next, scope, id);
+    else toggleIntoMore(next, scope, id);
+  });
+  // 手势也是「动过这一行」：清掉新按钮标红，别让它恢复后又红着（用户 m02493）。
+  clearFreshRow(scope, id);
+}
+
 function onWindowPointerDown(event: PointerEvent): void {
   loGesture = null;
+  loGestureKind = "";
   const store = loMenuStore;
   if (!store || event.button !== 0) return;
-  if (!modifiersMatch(event, store.get().options.gestureStash)) return;
+  const kind = gestureKindOf(event, "left", store.get());
+  if (!kind) return;
   const hit = gestureTargetOf(event.target, event.clientX, event.clientY);
   if (!hit) return;
+  // 「进更多」在这一处用不了（设置导航没有「更多」、这行是钉住的入口）：别把这一下吞掉。
+  if (kind === "more" && !canTuckIntoMore(hit.scope, hit.id)) return;
   loGesture = hit;
+  loGestureKind = kind;
   loGestureX = event.clientX;
   loGestureY = event.clientY;
 }
@@ -468,26 +507,27 @@ function onWindowPointerDown(event: PointerEvent): void {
 // 指针被系统 / 触摸取消时不会再来 pointerup：留着旧目标会让下一次 pointerup 误收别行。
 function onWindowPointerCancel(): void {
   loGesture = null;
+  loGestureKind = "";
 }
 
 function onWindowPointerUp(event: PointerEvent): void {
   const hit = loGesture;
+  const kind = loGestureKind;
   loGesture = null;
+  loGestureKind = "";
   const store = loMenuStore;
   if (!hit || !store || event.button !== 0) return;
-  if (!modifiersMatch(event, store.get().options.gestureStash)) return;
+  const state = store.get();
+  const prefix = kind === "stash" ? state.options.gestureStash : state.options.gestureMore;
+  if (!modifiersMatch(event, prefix)) return;
+  if (kind === "more" && !canTuckIntoMore(hit.scope, hit.id)) return;
   if (Math.abs(event.clientX - loGestureX) > LO_DRAG_THRESHOLD || Math.abs(event.clientY - loGestureY) > LO_DRAG_THRESHOLD) return;
   event.preventDefault();
   // 这里绝不能 stopPropagation：拖动控制器（drag-frame.ts）在 document 捕获阶段等 pointerup 收尾，
   // 截在 window 上会让它以为指针一直按着——手势收起一颗之后整页进入拖动态、鼠标松开也不结束
   // （用户 m01790）。click 已由下面的守门拦截，不需要再拦 pointerup。
   loGestureGuardUntil = Date.now() + LO_CLICK_SUPPRESS_MS;
-  store.update(function (next: PluginState): void {
-    // 已经收起的行，手势反过来就是恢复；没收起过才收。同一颗键在两处都讲得通。
-    toggleHidden(next, hit.scope, hit.id);
-  });
-  // 手势也是「动过这一行」：清掉新按钮标红，别让它恢复后又红着（用户 m02493）。
-  clearFreshRow(hit.scope, hit.id);
+  runGesture(store, kind, hit.scope, hit.id);
 }
 
 // 手势之后紧跟的那一下 click 属于宿主按钮本身，别让它再触发一次宿主的动作。
@@ -501,22 +541,22 @@ function onWindowClickGuard(event: MouseEvent): void {
 function onWindowContextMenu(event: MouseEvent): void {
   const store = loMenuStore;
   if (!store) return;
-  // 手势只在修饰键完全匹配时才接管；否则必须原样放行——位置管理卡片行的菜单挂在 React 的
-  // `onContextMenu` 上，这里若先 preventDefault + stopPropagation，事件到不了 React 根节点，
-  // 普通右键就再也弹不出菜单（用户 m01368 的回归）。
-  if (modifiersMatch(event, store.get().options.gestureMore)) {
+  // 手势只在鼠标键与修饰键都匹配时才接管；否则必须原样放行——位置管理卡片行的菜单挂在
+  // React 的 `onContextMenu` 上，这里若先 preventDefault + stopPropagation，事件到不了 React
+  // 根节点，普通右键就再也弹不出菜单（用户 m01368 的回归）。
+  const kind = gestureKindOf(event, "right", store.get());
+  if (kind) {
     const hit = gestureTargetOf(event.target, event.clientX, event.clientY);
     if (!hit) return;
-    const state = store.get();
-    if (isHidden(state, hit.scope, hit.id) || !canTuckIntoMore(hit.scope, hit.id)) return;
+    if (kind === "more" && !canTuckIntoMore(hit.scope, hit.id)) return;
     event.preventDefault();
     event.stopPropagation();
     // 同一节点上还有「更多」菜单自己的 contextmenu 监听，它会再开一次行菜单；
     // 用 stopImmediatePropagation 把后续监听一并停掉（用户 m01568）。
     event.stopImmediatePropagation();
-    store.update(function (next: PluginState): void {
-      toggleIntoMore(next, hit.scope, hit.id);
-    });
+    // 已收起的行也能按「进更多」手势：收起与「更多」互斥，进「更多」会把它从收起里捞出来
+    // （用户 m03490）。以前这里提前放行，卡片里显示「恢复」的行一按就弹出右键菜单。
+    runGesture(store, kind, hit.scope, hit.id);
     return;
   }
   const row = managedRowFrom(event.target, event.clientX, event.clientY);

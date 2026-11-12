@@ -90,7 +90,11 @@ function Card(props: CardProps): any {
               }
             : undefined
         },
-          props.title ? h("span", { className: "lo-card-title" }, props.title) : null,
+          props.title || props.note ? h("span", { className: "lo-card-headtext" },
+            props.title ? h("span", { className: "lo-card-title" }, props.title) : null,
+            // 卡片说明贴着标题放：它讲的是整张卡片，不该跑到第一行开关下面去冒充那一行的介绍。
+            props.note ? h("span", { className: "lo-card-note" }, props.note) : null
+          ) : null,
           props.action ? h("span", { className: "lo-card-action" }, props.action) : null,
           // 小三角在标题行最右端（动作区之后）：它是整行的状态指示，不该插在标题与动作之间。
           toggle ? h("span", { className: "lo-card-caret", "aria-hidden": "true" }, "\u25be") : null
@@ -106,7 +110,8 @@ function Chip(props: ChipProps): any {
     type: "button",
     className: "lo-chip",
     "aria-pressed": props.active ? "true" : "false",
-    onClick: props.onClick,
+    disabled: props.disabled === true,
+    onClick: props.disabled === true ? undefined : props.onClick,
     title: props.title || undefined
   }, props.children);
 }

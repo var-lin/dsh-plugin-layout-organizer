@@ -33,6 +33,8 @@ interface CardProps {
   title?: any;
   // 标题行右侧的动作区（如「恢复本组默认顺序」）；不传就只有标题。
   action?: any;
+  // 标题下的一句说明（比正文小一号、颜色浅）；不属于任何一行，别塞进行自己的 hint。
+  note?: any;
   // 传了 `onToggleCollapse` 时标题行变成折叠开关：点标题（不含右侧动作区）收起 / 展开卡片正文。
   // `collapsed` 是「当前已收起」，由调用方存进 store。
   collapsed?: boolean;
@@ -43,6 +45,7 @@ interface CardProps {
 interface ChipProps {
   active?: boolean;
   title?: string;
+  disabled?: boolean;
   onClick?: (event: any) => void;
   children?: any;
 }

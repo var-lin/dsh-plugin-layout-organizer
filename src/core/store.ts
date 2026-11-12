@@ -24,8 +24,11 @@ function defaultState(): PluginState {
       pruneStash: true,
       separateMore: true,
       collapsed: {},
-      gestureStash: ["control"],
-      gestureMore: ["control"],
+      gestureStash: DEFAULT_GESTURE_KEYS.slice(),
+      gestureMore: DEFAULT_GESTURE_KEYS.slice(),
+      // 出厂：左键收起、右键进更多；两行各自可在设置里换（同前缀时不能占同一个键）。
+      gestureStashButton: "left",
+      gestureMoreButton: "right",
       launcherSide: LAUNCHER_SIDE_DEFAULT,
       // null 表示「顶栏下方紧跟的位置」；数字表示距窗口顶部的像素距离。
       launcherY: null
@@ -211,6 +214,17 @@ function normalizeState(raw: unknown): PluginState {
   base.options.collapsed = asFlagMap(options.collapsed);
   base.options.gestureStash = asModifierList(options.gestureStash, base.options.gestureStash);
   base.options.gestureMore = asModifierList(options.gestureMore, base.options.gestureMore);
+  // 鼠标键只认 left / right；读不出来的按出厂键位补。
+  const stashButton = options.gestureStashButton;
+  base.options.gestureStashButton = typeof stashButton === "string" && GESTURE_BUTTONS.indexOf(stashButton) >= 0 ? stashButton : base.options.gestureStashButton;
+  const moreButton = options.gestureMoreButton;
+  base.options.gestureMoreButton = typeof moreButton === "string" && GESTURE_BUTTONS.indexOf(moreButton) >= 0 ? moreButton : base.options.gestureMoreButton;
+  // 两个手势在同一前缀下不能占同一个鼠标键（否则一次点击两件事都想做）：存坏了就恢复默认键位。
+  // 前缀按修饰键清单直接比（asModifierList 已按 MODIFIER_KEYS 排序），不依赖界面文案。
+  if (base.options.gestureStash.join("+") === base.options.gestureMore.join("+") && base.options.gestureStashButton === base.options.gestureMoreButton) {
+    base.options.gestureStashButton = "left";
+    base.options.gestureMoreButton = "right";
+  }
   const launcherSide = options.launcherSide;
   base.options.launcherSide = typeof launcherSide === "string" && LAUNCHER_SIDES.indexOf(launcherSide) >= 0 ? launcherSide : LAUNCHER_SIDE_DEFAULT;
   const launcherY = options.launcherY;

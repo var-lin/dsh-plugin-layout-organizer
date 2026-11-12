@@ -1,7 +1,7 @@
 const PLUGIN_ID = "dsh-plugin-layout-organizer";
 // 设置页大标题右侧展示的版本号。必须与 package.json 的 version 逐字一致——
 // test/accept.mjs 会断言两处相等，改版本时忘了同步这里会当场失败，而不是悄悄显示旧号。
-const PLUGIN_VERSION = "1.3.2";
+const PLUGIN_VERSION = "1.3.3";
 const NS = "layout-organizer";
 const STORAGE_KEY = "dsh.layout-organizer.state.v5";
 const STATE_VERSION = 5;
@@ -20,6 +20,10 @@ const OVERLAY_ID = "layout-organizer-overlay";
 const SORT_MODES: string[] = ["scope", "kind", "alpha"];
 // 鼠标手势的前缀只允许修饰键：鼠标键固定是左 / 右，前缀可配（用户 m01368）。
 const MODIFIER_KEYS: string[] = ["control", "alt", "shift", "meta"];
+// 两个手势前缀的出厂值：设置页的「恢复默认」与读档时的兜底都认这一份。
+const DEFAULT_GESTURE_KEYS: string[] = ["control"];
+// 手势可以配到的鼠标键；同一前缀下两项不能选同一个。
+const GESTURE_BUTTONS: string[] = ["left", "right"];
 const SORT_MODE_KEYS: Record<string, string> = {
   scope: "sort.scope",
   kind: "sort.kind",
@@ -298,6 +302,17 @@ function gestureText(keys: string[]): string {
     out.push(t("gesture." + MODIFIER_KEYS[i]));
   }
   return out.join(" + ");
+}
+
+/**
+ * 一个手势的完整键位提示：前缀 + 鼠标键，例如「Ctrl + 右键」。
+ *
+ * @param keys 修饰键列表。
+ * @param button 鼠标键 left / right。
+ * @returns 菜单与提示里显示的整组键位。
+ */
+function gestureCombo(keys: string[], button: string): string {
+  return gestureText(keys) + " + " + t(button === "right" ? "gesture.right" : "gesture.left");
 }
 
 /**

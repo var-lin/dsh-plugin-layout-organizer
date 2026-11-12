@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-layout-organizer",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "Drag-and-drop reordering, official/third-party dividers and a stash panel for the buttons DSH renders in the left sidebar, the sidebar footer, the conversation tabs, the composer dock, the right sidebar Start page and Settings. Only display position changes; the plugin registry is untouched.",
   "license": "MIT",
   "repository": {

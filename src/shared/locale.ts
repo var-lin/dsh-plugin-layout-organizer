@@ -165,6 +165,8 @@ const ZH: Record<string, string> = {
   "shortcut.record": "点击后按下新的组合键",
   "shortcut.recording": "请按下组合键…",
   "shortcut.reset": "恢复默认",
+  "shortcut.confirmReset": "再点一次恢复默认",
+  "shortcut.openHint": "打开「已收起的按钮」面板。",
   "shortcut.saved": "已保存。",
   "shortcut.invalid": "这个组合键不可用：{reason}",
   "shortcut.conflict": "已被占用：{list}",
@@ -180,14 +182,14 @@ const ZH: Record<string, string> = {
   "gesture.right": "右键",
   "gesture.stashLabel": "收起 / 恢复",
   "gesture.moreLabel": "进更多 / 出更多",
-  "gesture.stashHint": "前缀可改，鼠标键固定左键：按下收起，已收起则恢复。",
-  "gesture.moreHint": "前缀可改，鼠标键固定右键：按下进更多，已在更多则出更多。",
+  "gesture.stashHint": "前缀与鼠标键都可改：按下收起，已收起则恢复。",
+  "gesture.moreHint": "前缀与鼠标键都可改：按下进更多，已在更多则出更多。",
+  "gesture.buttonTaken": "另一个手势前缀相同时已经占了这个键，换前缀或选另一个键。",
   "gesture.record": "点击后按下修饰键（Ctrl / Alt / Shift / Meta），Enter 或移开焦点保存，Esc 取消",
   "gesture.recording": "按下修饰键…",
   "gesture.saved": "手势已保存。",
   // 手势前缀的校验（用户 m01368 建议 3）：空前缀会让手势彻底失效；两侧同前缀只提示、不拦。
-  "gesture.prefixEmpty": "前缀不能为空：至少按一个修饰键（Ctrl / Alt / Shift / Meta）。",
-  "gesture.prefixSame": "两侧手势前缀相同，用左 / 右键区分动作。",
+  "gesture.prefixEmpty": "前缀不能为空：至少按一个修饰键。",
 
   "nav.failed": "无法打开「{label}」，该按钮可能已不可用。"
 };
@@ -348,6 +350,8 @@ const EN: Record<string, string> = {
   "shortcut.record": "Click, then press the new combination",
   "shortcut.recording": "Press a combination…",
   "shortcut.reset": "Restore default",
+  "shortcut.confirmReset": "Click again to reset",
+  "shortcut.openHint": "Opens the tucked-away buttons panel.",
   "shortcut.saved": "Saved.",
   "shortcut.invalid": "That combination is not usable: {reason}",
   "shortcut.conflict": "Already taken by: {list}",
@@ -363,13 +367,13 @@ const EN: Record<string, string> = {
   "gesture.right": "Right click",
   "gesture.stashLabel": "Tuck / restore",
   "gesture.moreLabel": "Into / out of more",
-  "gesture.stashHint": "Prefix is configurable; the mouse button is fixed to left: click tucks, or restores when it is already tucked.",
-  "gesture.moreHint": "Prefix is configurable; the mouse button is fixed to right: click moves into “More”, or out when it is already there.",
+  "gesture.stashHint": "The prefix and mouse button are both configurable: click tucks it away, or restores it when already tucked.",
+  "gesture.moreHint": "The prefix and mouse button are both configurable: click moves it into “More”, or out when it is already there.",
+  "gesture.buttonTaken": "The other gesture already uses this button with the same prefix; change the prefix or pick the other button.",
   "gesture.record": "Click, then press modifiers (Ctrl / Alt / Shift / Meta); Enter or blur saves, Esc cancels",
   "gesture.recording": "Press modifiers…",
   "gesture.saved": "Gesture saved.",
-  "gesture.prefixEmpty": "The prefix cannot be empty: press at least one modifier (Ctrl / Alt / Shift / Meta).",
-  "gesture.prefixSame": "Both gestures use the same prefix; the left / right button tells them apart.",
+  "gesture.prefixEmpty": "The prefix cannot be empty: press at least one modifier.",
 
   "nav.failed": "Could not open “{label}”; that button may no longer be available."
 };

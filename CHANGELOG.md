@@ -3,6 +3,17 @@
 本项目的所有重要变更都记录在这里。
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/spec/v2.0.0.html)。
 
+## [1.3.3] - 2026-11-12
+
+### 修复
+
+- **位置管理卡片里显示「恢复」的行按 Ctrl + 右键会弹出右键菜单**：手势在「已收起」这一条上提前放行了，修饰键按下也只落到普通菜单。现在已收起的行同样按手势走：右键把它挪进「更多」（收起与「更多」互斥，收起状态同时清掉）。
+
+### 改进
+
+- **两个手势的鼠标键可以各选左键 / 右键**：每颗手势键帽右侧多了「左键 / 右键」两颗按钮，收起与「进更多」不必再固定一左一右；同一前缀下两项不能占同一个键，被另一项占用的那颗会灰着，改前缀撞上时自动让出另一个键。
+- **「快捷键」卡片的恢复按钮与提示统一**：三行（键盘快捷键、收起 / 恢复、进更多 / 出更多）右侧各有一颗「恢复默认」，都要再点一次才生效，已经是默认值时灰着；此前只有键盘那一行有，且不区分是否已改过。
+
 ## [1.3.2] - 2026-11-11
 
 ### 新增
@@ -214,6 +225,7 @@
 - 官方 / 第三方分类依赖内置 id 白名单，因为槽位条目没有可靠的来源字段；任何行都可以在设置页手动改判。
 - 「收纳」不是卸载；被收纳的按钮只是隐藏，其插件仍在运行。
 
+[1.3.3]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.3.3
 [1.3.2]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.3.2
 [1.3.1]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.3.1
 [1.3.0]: https://github.com/var-lin/dsh-plugin-layout-organizer/releases/tag/v1.3.0
